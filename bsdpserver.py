@@ -4,7 +4,7 @@
 #
 #   Author: Pepijn Bruienne - University of Michigan - bruienne@umich.edu
 #
-# Extremely alpha, beware ye mortals - dragons be here.
+# Extremely alpha, beware ye mortals - dragons be here...
 #
 # Requirements:
 #
