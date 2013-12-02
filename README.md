@@ -28,24 +28,57 @@ logging to a logging facility is planned but not yet implemented.
 
 ### Sample** **setup
 
+Install and start the TFTP and NFS services and clone the required repositories:
+
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-$ yum -y install tftp nfs-utils nfs-utils-lib
-$ sed -i 's/\/tftpboot/\/nbi/' /etc/xinet.d/tftp
-$ echo '/nbi	*(async,ro,no_root_squash,insecure)’ >> /etc/exports
-$ chkconfig --levels 235 nfs on
-$ /etc/init.d/nfs start
-$ chkconfig --levels 235 xinetd on
-$ /etc/init.d/xinetd start
+$ sudo yum -y install tftp nfs-utils nfs-utils-lib
+$ sudo sed -i 's/\/tftpboot/\/nbi/' /etc/xinet.d/tftp
+$ sudo echo '/nbi	*(async,ro,no_root_squash,insecure)' >> /etc/exports
+$ sudo chkconfig --levels 235 nfs on
+$ sudo /etc/init.d/nfs start
+$ sudo chkconfig --levels 235 xinetd on
+$ sudo /etc/init.d/xinetd start
 $ git clone https://bruienne@bitbucket.org/bruienne/bsdpy.git
 $ git clone https://github.com/bruienne/pydhcplib.git
 $ cd pydhcplib
 $ sudo python setup.py install
-$ cd ../
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Once the above is complete, one or more NBI bundles should be loaded onto the
+server. Assuming SSH is active, using scp to copy one or more images over would
+be straightforward:
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+$ scp -r /Path/To/MyNetBoot.nbi user@bsdpyhost:/nbi
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Once one or more boot images have been transferred, verify that both TFTP and
+NFS work by testing their connectivity from a client that can reach the BSDPy
+server:
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+$ showmount -e <ip or hostname of BSDPy server>
+Export list for netboot.bsdpy.com:
+/nbi *
+$ mount -t nfs <ip or hostname>:/nbi /local/mount
+$ ls /local/mount
+total 0
+$ tftp <ip or hostname>
+tftp> get nbi/MyNetBoot.nbi/i386/booter
+Received 174997 bytes in 0.2 seconds
+tftp> quit
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If TFTP and NFS check out successfully the BSDPy service can be started:
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 $ cd bsdpy
-$ sudo bsdpserver.py [/path/to/tftp/root]
+$ sudo bsdpserver.py
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
+
+### In depth
 
 BSDPy aims to offer the same functionality as Apple’s NetBoot server without
 relying on (Mac) OS X as its host OS. It is compatible with NetBoot Image (NBI)
