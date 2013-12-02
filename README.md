@@ -5,9 +5,11 @@
 
 
 
+### Purpose
+
 The purpose of this project is to implement a feature-complete NetBoot (BSDP)
 server using Python. It relies on the pydhcplib module (http://bit.ly/IGtv67) to
-handle BSDP requests from Apple Mac clients
+handle BSDP requests from Apple Mac clients.
 
 Apple has long been the only game in town when it comes to providing NetBoot
 service. Other projects have been able to replicate partial functionality
@@ -15,18 +17,25 @@ through ISC DHCPd and custom configurations, most notably JAMF’s NetSUS
 (https://github.com/jamf/NetSUS/). Some of the DHCPd-based solutions also
 require patching of the DHCPd source to work properly. What they have in common
 is that none are compatible with the OS X Startup Disk preference pane because
-it uses a randomized reply port instead of the standard (port 68).
+it uses a randomized reply port instead of the standard port (68).
 
 **Note: **Instructions regarding installation as a system daemon will be added
 at a later date. Currently the service can be tested by running it from a CLI
 prompt. Some basic logging is written to STDOUT in this case. More complete
-logging to a logging facility is still to be implemented.
+logging to a logging facility is planned but not yet implemented.
 
 
 
-**Sample setup:**
+### Sample** **setup
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+$ yum -y install tftp nfs-utils nfs-utils-lib
+$ sed -i 's/\/tftpboot/\/nbi/' /etc/xinet.d/tftp
+$ echo '/nbi	*(async,ro,no_root_squash,insecure)’ >> /etc/exports
+$ chkconfig --levels 235 nfs on
+$ /etc/init.d/nfs start
+$ chkconfig --levels 235 xinetd on
+$ /etc/init.d/xinetd start
 $ git clone https://bruienne@bitbucket.org/bruienne/bsdpy.git
 $ git clone https://github.com/bruienne/pydhcplib.git
 $ cd pydhcplib
@@ -39,8 +48,11 @@ $ sudo bsdpserver.py [/path/to/tftp/root]
 
 
 BSDPy aims to offer the same functionality as Apple’s NetBoot server without
-relying on (Mac) OS X as its host OS. A checklist of features follows below,
-with those not currently implemented in italic type:
+relying on (Mac) OS X as its host OS. It is compatible with NetBoot Image (NBI)
+bundles as created by Apple’s System Image Utility, DeployStudio Server
+Assistant and those created by AutoNBI (https://bitbucket.org/bruienne/autonbi/)
+with other tools likely to be compatible too. A checklist of features follows
+below, with those not currently implemented in italic type:
 
 
 
