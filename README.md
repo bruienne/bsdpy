@@ -44,9 +44,9 @@ $ cd pydhcplib
 $ sudo python setup.py install
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Once the above is complete, one or more NBI bundles should be loaded onto the
-server. Assuming SSH is active, using scp to copy one or more images over would
-be straightforward:
+Once the above is complete, one or more NBI bundles must be transferred to the
+server’s NetBoot service root path, **/nbi**. Assuming SSH is active, using scp
+to copy one or more images over would be straightforward:
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 $ scp -r /Path/To/MyNetBoot.nbi user@bsdpyhost:/nbi
@@ -60,13 +60,18 @@ server:
 $ showmount -e <ip or hostname of BSDPy server>
 Export list for netboot.bsdpy.com:
 /nbi *
-$ mount -t nfs <ip or hostname>:/nbi /local/mount
-$ ls /local/mount
-total 0
+$ cd ~/; mkdir nbimount
+$ mount -t nfs <ip or hostname>:/nbi ~/nbimount
+$ ls ~/nbimount
+DSR-1090.nbi  NI2.nbi  NI.nbi
+$ umount ~/nbimount
 $ tftp <ip or hostname>
 tftp> get nbi/MyNetBoot.nbi/i386/booter
 Received 174997 bytes in 0.2 seconds
 tftp> quit
+$ ls -l booter
+-rwxr-xr-x 1 root root 994464 May 15  2013 booter
+$ rm booter
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 If TFTP and NFS check out successfully the BSDPy service can be started:
@@ -74,6 +79,19 @@ If TFTP and NFS check out successfully the BSDPy service can be started:
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 $ cd bsdpy
 $ sudo bsdpserver.py
+Using /nbi as root path
+********************************************************
+Got BSDP INFORM[LIST] packet: 
+=================================================================
+Return ACK[LIST] to 10.0.2.5 on 68
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+By default BSDPy will assume the service root path is /nbi. If it is not, you
+can specify it in the CLI:
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+$ sudo bsdpserver.py /mynbiroot
+Using /mynbiroot as root path
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
