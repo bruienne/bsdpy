@@ -28,7 +28,7 @@ logging to a logging facility is planned but not yet implemented.
 
 ### Sample** **setup
 
-The following walkthrough assumes a base CentOS 6.4 **32-bit** install. I
+The following walkthrough assumes a base CentOS 6.4 (32 or 64-bit) install. I
 created mine using Vagrant.
 
 Install and start the TFTP and NFS services and clone the required repositories:
