@@ -28,19 +28,22 @@ logging to a logging facility is planned but not yet implemented.
 
 ### Sample** **setup
 
-The following walkthrough assumes a base CentOS 6.4 install. I create mine using
-Vagrant.
+The following walkthrough assumes a base CentOS 6.4 **32-bit** install. I
+created mine using Vagrant.
 
 Install and start the TFTP and NFS services and clone the required repositories:
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-$ sudo yum -y install tftp nfs-utils nfs-utils-lib
-$ sudo sed -i 's/\/tftpboot/\/nbi/' /etc/xinet.d/tftp
-$ sudo echo '/nbi	*(async,ro,no_root_squash,insecure)' >> /etc/exports
+$ sudo yum -y install xinetd tftp-server nfs-utils nfs-utils-lib git-core python python-devel
+$ sudo sed -i 's/\/var\/lib\/tftpboot/\/nbi/' /etc/xinetd.d/tftp
+$ sudo sh -c 'echo "/nbi   *(async,ro,no_root_squash,insecure)" >> /etc/exports'
+$ sudo mkdir /nbi
 $ sudo chkconfig --levels 235 nfs on
-$ sudo /etc/init.d/nfs start
 $ sudo chkconfig --levels 235 xinetd on
-$ sudo /etc/init.d/xinetd start
+$ sudo chkconfig --levels 235 tftp on
+$ sudo chkconfig --levels 235 iptables off
+$ sudo service nfs start
+$ sudo service xinetd start
 $ git clone https://bruienne@bitbucket.org/bruienne/bsdpy.git
 $ git clone https://github.com/bruienne/pydhcplib.git
 $ cd pydhcplib
