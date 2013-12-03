@@ -78,9 +78,13 @@ else:
     tftprootpath = '/nbi'
     print 'Using ' + tftprootpath + ' as root path'
 
-serverip = map(int, get_ip('eth0').split('.'))
-serverhostname = socket.gethostname()
-nfsrootpath = 'nfs:' + get_ip('eth0') + ':' + tftprootpath + ':'
+try:
+    serverip = map(int, get_ip('eth0').split('.'))
+    serverhostname = socket.gethostname()
+    nfsrootpath = 'nfs:' + get_ip('eth0') + ':' + tftprootpath + ':'
+except:
+    print 'Error setting serverip, serverhostname or nfsrootpath', sys.exc_info()
+    raise
 
 netopt = {'client_listen_port':"68",
            'server_listen_port':"67",
@@ -231,13 +235,17 @@ def ack(packet, msgtype):
                 print "Unexpected error:", sys.exc_info()
                 raise
         
-        bsdpack.SetOption("file", strlist(booterfile.ljust(128,'\x00')).list())
+        bsdpack.SetOption("file", strlist(os.path.join(*booterfile.split('/')[2:]).ljust(128,'\x00')).list())
         bsdpack.SetOption("root_path", strlist(rootpath).list())
         bsdpack.SetOption("vendor_encapsulated_options", strlist([1,1,2,8,4] + selectedimage).list())
 
         print '================================================================='
         print "Return ACK[SELECT] to " + str(clientip) + ' on ' + str(replyport)
-
+	try:
+	    print 'Server IP: ' + str(serverip) + ' booter: ' + str(booterfile) + ' root path: ' + str(rootpath) + ' sname: ' + str(serverhostname)
+	except:
+	    print "Error occurred - ", sys.exc_info()
+	    raise
     return bsdpack, clientip, replyport
 
 
