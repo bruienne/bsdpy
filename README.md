@@ -70,19 +70,25 @@ server:
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 $ showmount -e <ip or hostname of BSDPy server>
-Export list for netboot.bsdpy.com:
+Export list for <ip or hostname of BSDPy server>:
 /nbi *
 $ cd ~/; mkdir nbimount
 $ mount -t nfs <ip or hostname>:/nbi ~/nbimount
 $ ls ~/nbimount
+
+#Sample output
 DSR-1090.nbi  NI2.nbi  NI.nbi
+
 $ umount ~/nbimount
 $ tftp <ip or hostname>
 tftp> get nbi/MyNetBoot.nbi/i386/booter
 Received 174997 bytes in 0.2 seconds
 tftp> quit
 $ ls -l booter
+
+#Sample output
 -rwxr-xr-x 1 root root 994464 May 15  2013 booter
+
 $ rm booter
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -91,6 +97,8 @@ If TFTP and NFS check out successfully the BSDPy service can be started:
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 $ cd bsdpy
 $ sudo bsdpserver.py
+
+#Sample output
 Using /nbi as root path
 ********************************************************
 Got BSDP INFORM[LIST] packet: 
@@ -103,6 +111,8 @@ can specify it in the CLI:
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 $ sudo bsdpserver.py /mynbiroot
+
+#Sample output
 Using /mynbiroot as root path
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
