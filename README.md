@@ -24,13 +24,14 @@ at a later date. Currently the service can be tested by running it from a CLI
 prompt. Some basic logging is written to STDOUT in this case. More complete
 logging to a logging facility is planned but not yet implemented.
 
-**WARNING: **Apart from the pre-alpha state BSDPy is in right now you must
-always ensure proper DNS functionality in order for BSDP to work - the same
-requirements as Apple’s NetInstall Server. This means having working forward
-lookups for your BSDPy host. Additionally you really want to have a static IP
-assignment for the BSDPy host, either through DHCP reservation or directly set.
-Things are guaranteed to be flakey or broken if either one of these is not
-working.
+**WARNING:** As with any BSDP service, proper DNS functionality is required in
+order for it to work - the same requirements as Apple’s NetInstall Server. At a
+minimum this means having working forward lookups for the TFTP server which in
+the example below is the same as the BSDPy and NFS server. It is possible to
+separate these roles, which will be up to the individual admin to implement.
+Additionally you really want to have a static IP assignment for the BSDPy host,
+either through DHCP reservation or directly set. Things are guaranteed to be
+flakey or broken if either one of these is not working.
 
 ### Sample** **setup
 
