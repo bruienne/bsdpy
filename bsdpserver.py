@@ -23,12 +23,16 @@
 #
 # Requirements:
 #
-# - Python 2.5. Not tested with Python 3.
+# - Python 2.5 or later. Not tested with Python 3.
 #
-# - A Linux distribution that supports Python 2.7, NFS and TFTP.
+# - A Linux distribution that supports:
+#   Python 2.5 or later
+#   NFS service
+#   TFTP service
+#
 #   Tested on CentOS 6.4 and Ubuntu Precise
 #
-# - Working installation of a fork of the pydhcplib project:
+# - Working installation of this fork of the pydhcplib project:
 #
 #   $ git clone https://github.com/bruienne/pydhcplib.git
 #   $ cd pydhcplib
