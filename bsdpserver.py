@@ -204,7 +204,7 @@ def ack(packet, msgtype):
         try:
             for image in nbiimages:
                 if image['isdefault']:
-                    if defaultnbi < image['id']
+                    if defaultnbi < image['id']:
                         defaultnbi = image['id']
                 imageid = '%04X' % image['id']
                 n = 2
