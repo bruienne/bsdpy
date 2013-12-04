@@ -200,7 +200,8 @@ Unless required by applicable law or agreed to in writing, software    distribut
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-This software relies on a modified version of PyDhcpLib by Mathieu Ignacio (http://pydhcplib.tuxfamily.org/pmwiki/index.php) which was released under the GPL 3 license.
+This software relies on a modified version of PyDhcpLib by Mathieu Ignacio
+(http://pydhcplib.tuxfamily.org/pmwiki/index.php) which was released under the GPL 3 license.
 
 The modified source may be obtained from the project page here: https://github.com/bruienne/pydhcplib and used and modified under the same terms as set forth in the full GNU General Public License 3.
 
