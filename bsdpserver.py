@@ -14,7 +14,7 @@
 #   Tested on CentOS 6.4 and Ubuntu Precise
 #
 # - Working installation of a fork of the pydhcplib project:
-#   
+#
 #   $ git clone https://github.com/bruienne/pydhcplib.git
 #   $ cd pydhcplib
 #   $ sudo python setup.py install
@@ -30,7 +30,7 @@
 #   required. In a typical situation this would be the same server running the
 #   BSDPy process, but this is not required. Just make sure that wherever TFTP
 #   is running has working DNS lookup.
-# 
+#
 # - Root permissions. Due to its need to write to use raw sockets elevated
 #   privileges are required. When run as a typical system service through init
 #   or upstart this should not be an issue.
@@ -96,7 +96,7 @@ class Server(DhcpServer):
         DhcpServer.__init__(self,options["listen_address"],
                                  options["client_listen_port"],
                                  options["server_listen_port"])
-
+    
     def HandleDhcpInform(self, packet):
         return packet
 
@@ -119,19 +119,19 @@ def getnbioptions(incoming):
                 del dirs[:]
                 nbimageinfoplist = find('NBImageInfo.plist', path)[0]
                 nbimageinfo = plistlib.readPlist(nbimageinfoplist)
-
+                
                 thisnbi['dmg'] = '/'.join(find('*.dmg', path)[0].split('/')[2:])
                 thisnbi['booter'] = find('booter', path)[0]
                 thisnbi['id'] = nbimageinfo['Index']
                 thisnbi['name'] = nbimageinfo['Name']
                 thisnbi['isdefault'] = nbimageinfo['IsDefault']
                 thisnbi['length'] = len(nbimageinfo['Name'])
-            
+                
                 nbioptions.append(thisnbi)
     except:
         print "Unexpected error:", sys.exc_info()
         raise
-        
+    
     return nbioptions
 
 
@@ -147,7 +147,7 @@ def parseoptions(bsdpoptions):
         pointer = optionlength + length + 1
         
         msgtypes[bsdpoptioncodes[bsdpoptions[start]]] = [length+1, bsdpoptions[length]]
-
+    
     for msg, values in msgtypes.items():
         start = values[0]
         end = start + values[1]
@@ -162,16 +162,16 @@ def ack(packet, msgtype):
     """docstring for createlistack"""
     
     bsdpack = DhcpPacket()
-
+    
     try:
         bsdpoptions = parseoptions(packet.GetOption('vendor_encapsulated_options'))
         nbiimages = getnbioptions(tftprootpath)
-
+        
         if 'reply_port' in bsdpoptions:
             replyport = int(str(format(bsdpoptions['reply_port'][0], 'x') + format(bsdpoptions['reply_port'][1], 'x')), 16)
         else:
             replyport = 68
-
+        
         clientip = ipv4(packet.GetOption('ciaddr'))
     except:
         print "Unexpected error:", sys.exc_info()[0]
@@ -189,24 +189,24 @@ def ack(packet, msgtype):
     bsdpack.SetOption("dhcp_message_type", [5])
     bsdpack.SetOption("server_identifier", serverip)
     bsdpack.SetOption("vendor_class_identifier", strlist('AAPLBSDPC').list())
-
+    
     if msgtype == 'list':
         nameslength = 0
-
+        
         for i in nbiimages:
             nameslength += i['length']
-
+        
         totallength = len(nbiimages) * 5 + nameslength
         bsdpimagelist = [9,totallength]
         imagenameslist = []
         defaultnbi = 0
-
+        
         try:
             for image in nbiimages:
-                if image['isdefault']:
-                    print 'Default image is: ' + defaultnbi
+                if image['isdefault'] is True:
                     if defaultnbi < image['id']:
                         defaultnbi = image['id']
+
                 imageid = '%04X' % image['id']
                 n = 2
                 imageid = [int(imageid[i:i+n], 16) for i in range(0, len(imageid), n)]
@@ -214,31 +214,33 @@ def ack(packet, msgtype):
         except:
             print "Unexpected error:", sys.exc_info()
             raise
-
+        
         bsdpimagelist += imagenameslist
-        defaultnbi = [int('%04X' % defaultnbi[i:i+n], 16) for i in range(0, len('%04X' % defaultnbi), n)]
-
-        bsdpack.SetOption("vendor_encapsulated_options", strlist([1,1,1,4,2,128,128,7,4] + defaultnbi + bsdpimagelist).list())
+        
+        defaultnbi = '%04X' % defaultnbi
+        defaultnbi = [7,4,129,0] + [int(defaultnbi[i:i+n], 16) for i in range(0, len(defaultnbi), n)]
+        
+        bsdpack.SetOption("vendor_encapsulated_options", strlist([1,1,1,4,2,128,128] + defaultnbi + bsdpimagelist).list())
         
         print '================================================================='
         print "Return ACK[LIST] to " + str(clientip) + ' on ' + str(replyport)
-        
+    
     elif msgtype == 'select':
         try:
             imageid = int('%02X' % bsdpoptions['selected_boot_image'][2] + '%02X' % bsdpoptions['selected_boot_image'][3], 16)
         except:
             print "Unexpected error:", sys.exc_info()
             raise
-
+        
         booterfile = ''
         rootpath = ''
-
+        
         for nbidict in nbiimages:
             try:
                 if nbidict['id'] == imageid:
                     booterfile = nbidict['booter']
                     rootpath = nfsrootpath + nbidict['dmg']
-                    selectedimage = bsdpoptions['selected_boot_image'] + [len(strlist(nbidict['name']).list())] + strlist(nbidict['name']).list()
+                    selectedimage = bsdpoptions['selected_boot_image']
             except:
                 print "Unexpected error:", sys.exc_info()
                 raise
@@ -246,42 +248,38 @@ def ack(packet, msgtype):
         bsdpack.SetOption("file", strlist(os.path.join(*booterfile.split('/')[2:]).ljust(128,'\x00')).list())
         bsdpack.SetOption("root_path", strlist(rootpath).list())
         bsdpack.SetOption("vendor_encapsulated_options", strlist([1,1,2,8,4] + selectedimage).list())
-
+        
         print '================================================================='
         print "Return ACK[SELECT] to " + str(clientip) + ' on ' + str(replyport)
-	try:
-	    print 'Server IP: ' + str(serverip) + ' booter: ' + str(booterfile) + ' root path: ' + str(rootpath) + ' sname: ' + str(serverhostname)
-	except:
-	    print "Error occurred - ", sys.exc_info()
-	    raise
+
     return bsdpack, clientip, replyport
 
 
 def main():
     """Main routine. Do the work."""
-
+    
     server = Server(netopt)
-
+    
     while True:
-    
+        
         packet = server.GetNextDhcpPacket()
-    
+        
         try:
             if len(packet.GetOption('vendor_encapsulated_options')) > 1:
                 if packet.GetOption('vendor_encapsulated_options')[2] == 1:
                     print '********************************************************'
                     print 'Got BSDP INFORM[LIST] packet: '
-                
+                    
                     bsdplistack, clientip, replyport = ack(packet, 'list')
                     server.SendDhcpPacketTo(bsdplistack, str(clientip), replyport)
-            
+                
                 elif packet.GetOption('vendor_encapsulated_options')[2] == 2:
                     print '********************************************************'
                     print 'Got BSDP INFORM[SELECT] packet: '
-                
+                    
                     bsdpselectack, selectackclientip, selectackreplyport = ack(packet, 'select')
                     server.SendDhcpPacketTo(bsdpselectack, str(selectackclientip), selectackreplyport)
-            
+                
                 elif len(packet.GetOption('vendor_encapsulated_options')) <= 7:
                     pass
         except:
