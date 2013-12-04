@@ -124,6 +124,7 @@ def getnbioptions(incoming):
                 thisnbi['booter'] = find('booter', path)[0]
                 thisnbi['id'] = nbimageinfo['Index']
                 thisnbi['name'] = nbimageinfo['Name']
+                thisnbi['isdefault'] = nbimageinfo['IsDefault']
                 thisnbi['length'] = len(nbimageinfo['Name'])
             
                 nbioptions.append(thisnbi)
@@ -198,9 +199,13 @@ def ack(packet, msgtype):
         totallength = len(nbiimages) * 5 + nameslength
         bsdpimagelist = [9,totallength]
         imagenameslist = []
+        defaultnbi = 0
 
         try:
             for image in nbiimages:
+                if image['isdefault']:
+                    if defaultnbi < image['id']
+                        defaultnbi = image['id']
                 imageid = '%04X' % image['id']
                 n = 2
                 imageid = [int(imageid[i:i+n], 16) for i in range(0, len(imageid), n)]
@@ -208,9 +213,11 @@ def ack(packet, msgtype):
         except:
             print "Unexpected error:", sys.exc_info()
             raise
+
         bsdpimagelist += imagenameslist
-        
-        bsdpack.SetOption("vendor_encapsulated_options", strlist([1,1,1,4,2,128,128,7,4,129,0,0,5] + bsdpimagelist).list())
+        defaultnbi = [int('%04X' % defaultnbi[i:i+n], 16) for i in range(0, len('%04X' % defaultnbi), n)]
+
+        bsdpack.SetOption("vendor_encapsulated_options", strlist([1,1,1,4,2,128,128,7,4] + defaultnbi + bsdpimagelist).list())
         
         print '================================================================='
         print "Return ACK[LIST] to " + str(clientip) + ' on ' + str(replyport)
