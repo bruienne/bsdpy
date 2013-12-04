@@ -243,6 +243,7 @@ def ack(packet, msgtype):
         
         print '================================================================='
         print "Return ACK[LIST] to " + str(clientip) + ' on ' + str(replyport)
+        print "Default boot image ID: " + str(defaultnbi)
     
     elif msgtype == 'select':
         try:
