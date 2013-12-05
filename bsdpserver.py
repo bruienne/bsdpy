@@ -136,7 +136,7 @@ def getnbioptions(incoming):
             thisnbi = {}
             if path.count(os.sep) >= 2:
                 del dirs[:]
-                print path
+                print 'Boot images used in this session:\n' + path
                 nbimageinfoplist = find('NBImageInfo.plist', path)[0]
                 nbimageinfo = plistlib.readPlist(nbimageinfoplist)
                 
