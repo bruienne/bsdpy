@@ -178,15 +178,14 @@ def parseoptions(bsdpoptions):
     return optionvalues
 
 
-def ack(packet, msgtype):
+def ack(packet, msgtype, nbiimages):
     """docstring for createlistack"""
     
     bsdpack = DhcpPacket()
     
     try:
         bsdpoptions = parseoptions(packet.GetOption('vendor_encapsulated_options'))
-        nbiimages = getnbioptions(tftprootpath)
-        
+
         if 'reply_port' in bsdpoptions:
             replyport = int(str(format(bsdpoptions['reply_port'][0], 'x') + format(bsdpoptions['reply_port'][1], 'x')), 16)
         else:
@@ -280,6 +279,7 @@ def main():
     """Main routine. Do the work."""
     
     server = Server(netopt)
+    nbiimages = getnbioptions(tftprootpath)
     
     while True:
         
@@ -291,14 +291,14 @@ def main():
                     print '********************************************************'
                     print 'Got BSDP INFORM[LIST] packet: '
                     
-                    bsdplistack, clientip, replyport = ack(packet, 'list')
+                    bsdplistack, clientip, replyport = ack(packet, 'list', nbiimages)
                     server.SendDhcpPacketTo(bsdplistack, str(clientip), replyport)
                 
                 elif packet.GetOption('vendor_encapsulated_options')[2] == 2:
                     print '********************************************************'
                     print 'Got BSDP INFORM[SELECT] packet: '
                     
-                    bsdpselectack, selectackclientip, selectackreplyport = ack(packet, 'select')
+                    bsdpselectack, selectackclientip, selectackreplyport = ack(packet, 'select', nbiimages)
                     server.SendDhcpPacketTo(bsdpselectack, str(selectackclientip), selectackreplyport)
                 
                 elif len(packet.GetOption('vendor_encapsulated_options')) <= 7:
