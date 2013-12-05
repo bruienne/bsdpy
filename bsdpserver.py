@@ -136,6 +136,7 @@ def getnbioptions(incoming):
             thisnbi = {}
             if path.count(os.sep) >= 2:
                 del dirs[:]
+                print path
                 nbimageinfoplist = find('NBImageInfo.plist', path)[0]
                 nbimageinfo = plistlib.readPlist(nbimageinfoplist)
                 
