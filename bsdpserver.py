@@ -131,12 +131,15 @@ def find(pattern, path):
 
 def getnbioptions(incoming):
     nbioptions = []
+    nbisources = []
     try:
         for path, dirs, files in os.walk(incoming):
             thisnbi = {}
             if path.count(os.sep) >= 2:
                 del dirs[:]
-                print 'Boot images used in this session:\n' + path
+                
+                nbisources.append(path)
+                
                 nbimageinfoplist = find('NBImageInfo.plist', path)[0]
                 nbimageinfo = plistlib.readPlist(nbimageinfoplist)
                 
@@ -151,7 +154,11 @@ def getnbioptions(incoming):
     except:
         print "Unexpected error:", sys.exc_info()
         raise
-    
+
+    print 'Boot images used in this session:\n************************************'
+    for nbi in nbiimages:
+        print nbi
+        
     return nbioptions
 
 
