@@ -156,7 +156,7 @@ def getnbioptions(incoming):
         raise
 
     print 'Boot images used in this session:\n************************************'
-    for nbi in nbiimages:
+    for nbi in nbisources:
         print nbi
         
     return nbioptions
