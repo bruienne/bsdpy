@@ -158,8 +158,6 @@ def getnbioptions(incoming):
     print 'Boot images used in this session:\n************************************'
     for nbi in nbisources:
         print nbi
-    for options in nbioptions:
-        print options.items()
     print '************************************'
     
     return nbioptions
@@ -188,9 +186,9 @@ def parseoptions(bsdpoptions):
     return optionvalues
 
 
-def ack(packet, msgtype, nbiimages):
+def ack(packet, defaultnbi, msgtype):
     """docstring for createlistack"""
-    
+        
     bsdpack = DhcpPacket()
     
     try:
@@ -221,33 +219,23 @@ def ack(packet, msgtype, nbiimages):
     
     if msgtype == 'list':
         nameslength = 0
+        n = 2
         
         for i in nbiimages:
             nameslength += i['length']
         
         totallength = len(nbiimages) * 5 + nameslength
         bsdpimagelist = [9,totallength]
-        imagenameslist = []
-        defaultnbi = 0
-        
-        try:
-            for image in nbiimages:
-                if image['isdefault'] is True:
-                    if defaultnbi < image['id']:
-                        defaultnbi = image['id']
-
-                imageid = '%04X' % image['id']
-                n = 2
-                imageid = [int(imageid[i:i+n], 16) for i in range(0, len(imageid), n)]
-                imagenameslist += [129,0] + imageid + [image['length']] + strlist(image['name']).list()
-        except:
-            print "Unexpected error:", sys.exc_info()
-            raise
         
         bsdpimagelist += imagenameslist
         
         defaultnbi = '%04X' % defaultnbi
-        defaultnbi = [7,4,129,0] + [int(defaultnbi[i:i+n], 16) for i in range(0, len(defaultnbi), n)]
+        print defaultnbi
+        try:
+            defaultnbi = [7,4,129,0] + [int(defaultnbi[i:i+n], 16) for i in range(0, len(defaultnbi), n)]
+        except:
+            print "Unexpected error:", sys.exc_info()
+        print defaultnbi
         
         bsdpack.SetOption("vendor_encapsulated_options", strlist([1,1,1,4,2,128,128] + defaultnbi + bsdpimagelist).list())
         
@@ -284,12 +272,31 @@ def ack(packet, msgtype, nbiimages):
 
     return bsdpack, clientip, replyport
 
+imagenameslist = []
+nbiimages = []
 
 def main():
     """Main routine. Do the work."""
+    global imagenameslist
+    global nbiimages
     
     server = Server(netopt)
     nbiimages = getnbioptions(tftprootpath)
+    defaultnbi = 0
+    
+    try:
+        for image in nbiimages:
+            if image['isdefault'] is True:
+                if defaultnbi < image['id']:
+                    defaultnbi = image['id']
+
+            imageid = '%04X' % image['id']
+            n = 2
+            imageid = [int(imageid[i:i+n], 16) for i in range(0, len(imageid), n)]
+            imagenameslist += [129,0] + imageid + [image['length']] + strlist(image['name']).list()
+    except:
+        print "Unexpected error:", sys.exc_info()
+        raise
     
     while True:
         
@@ -301,14 +308,14 @@ def main():
                     print '********************************************************'
                     print 'Got BSDP INFORM[LIST] packet: '
                     
-                    bsdplistack, clientip, replyport = ack(packet, 'list', nbiimages)
+                    bsdplistack, clientip, replyport = ack(packet, defaultnbi, 'list')
                     server.SendDhcpPacketTo(bsdplistack, str(clientip), replyport)
                 
                 elif packet.GetOption('vendor_encapsulated_options')[2] == 2:
                     print '********************************************************'
                     print 'Got BSDP INFORM[SELECT] packet: '
                     
-                    bsdpselectack, selectackclientip, selectackreplyport = ack(packet, 'select', nbiimages)
+                    bsdpselectack, selectackclientip, selectackreplyport = ack(packet, None, 'select')
                     server.SendDhcpPacketTo(bsdpselectack, str(selectackclientip), selectackreplyport)
                 
                 elif len(packet.GetOption('vendor_encapsulated_options')) <= 7:
