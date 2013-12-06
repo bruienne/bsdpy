@@ -226,16 +226,13 @@ def ack(packet, defaultnbi, msgtype):
         
         totallength = len(nbiimages) * 5 + nameslength
         bsdpimagelist = [9,totallength]
-        
         bsdpimagelist += imagenameslist
-        
         defaultnbi = '%04X' % defaultnbi
-        print defaultnbi
+
         try:
             defaultnbi = [7,4,129,0] + [int(defaultnbi[i:i+n], 16) for i in range(0, len(defaultnbi), n)]
         except:
             print "Unexpected error:", sys.exc_info()
-        print defaultnbi
         
         bsdpack.SetOption("vendor_encapsulated_options", strlist([1,1,1,4,2,128,128] + defaultnbi + bsdpimagelist).list())
         
