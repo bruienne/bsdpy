@@ -260,7 +260,7 @@ def ack(packet, defaultnbi, msgtype):
                 print "Unexpected error:", sys.exc_info()
                 raise
         
-        bsdpack.SetOption("file", strlist(os.path.join(*booterfile.split('/')[2:]).ljust(128,'\x00')).list())
+        bsdpack.SetOption("file", strlist(booterfile.ljust(128,'\x00')).list())
         bsdpack.SetOption("root_path", strlist(rootpath).list())
         bsdpack.SetOption("vendor_encapsulated_options", strlist([1,1,2,8,4] + selectedimage).list())
         
