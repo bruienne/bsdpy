@@ -83,7 +83,7 @@ DSR-1090.nbi  NI2.nbi  NI.nbi
 $ umount ~/nbimount
 $ tftp <ip or hostname>
 #Sample get command
-tftp> get nbi/MyNetBoot.nbi/i386/booter
+tftp> get /nbi/MyNetBoot.nbi/i386/booter
 Received 174997 bytes in 0.2 seconds
 tftp> quit
 $ ls -l booter
