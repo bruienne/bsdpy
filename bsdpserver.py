@@ -1,6 +1,6 @@
 #!/usr/bin/python
 ################################################################################
-# Copyright 2013 The Regents of the University of Michigan
+# Copyright 2014 The Regents of the University of Michigan
 # 
 #  Licensed under the Apache License, Version 2.0 (the "License"); you may not
 #  use this file except in compliance with the License. You may obtain a copy of
@@ -19,7 +19,7 @@
 #
 #   Author: Pepijn Bruienne - University of Michigan - bruienne@umich.edu
 #
-# Extremely alpha, beware ye mortals - dragons be here...
+# Extremely alpha, beware ye mortals - here be dragons...
 #
 # Requirements:
 #
@@ -111,7 +111,8 @@ try:
     serverhostname = socket.gethostname()
     nfsrootpath = 'nfs:' + get_ip('eth0') + ':' + tftprootpath + ':'
 except:
-    print 'Error setting serverip, serverhostname or nfsrootpath', sys.exc_info()
+    print 'Error setting serverip, serverhostname or nfsrootpath', \
+            sys.exc_info()
     raise
 
 # Some standard DHCP/BSDP options to set listen, server ports and what IP
@@ -162,7 +163,7 @@ def getnbioptions(incoming):
     """
     # Initialize lists to store NBIs and their options
     nbioptions = []
-    # nbisources = []
+    nbisources = []
     try:
         for path, dirs, files in os.walk(incoming):
             # Create an empty dict that will hold an NBI's settings
@@ -171,7 +172,7 @@ def getnbioptions(incoming):
                 del dirs[:]
                 
                 # Found an eligible NBI source, add it to our nbisources list
-                # nbisources.append(path)
+                nbisources.append(path)
                 
                 # Search the path for an NBImageInfo.plist and parse it.
                 nbimageinfoplist = find('NBImageInfo.plist', path)[0]
@@ -186,14 +187,22 @@ def getnbioptions(incoming):
                 #   isdefault = Indicates the NBI is the default
                 #   length = Length of the NBI name, needed for BSDP packet
                 #   name = The name of the NBI
-                thisnbi['booter'] = find('booter', path)[0]
-                thisnbi['disabledsysids'] = nbimageinfo['DisabledSystemIdentifiers']
-                thisnbi['dmg'] = '/'.join(find('*.dmg', path)[0].split('/')[2:])
-                thisnbi['enabledsysids'] = nbimageinfo['EnabledSystemIdentifiers']
-                thisnbi['id'] = nbimageinfo['Index']
-                thisnbi['isdefault'] = nbimageinfo['IsDefault']
-                thisnbi['length'] = len(nbimageinfo['Name'])
-                thisnbi['name'] = nbimageinfo['Name']
+                thisnbi['booter'] = \
+                    find('booter', path)[0]
+                thisnbi['disabledsysids'] = \
+                    nbimageinfo['DisabledSystemIdentifiers']
+                thisnbi['dmg'] = \
+                    '/'.join(find('*.dmg', path)[0].split('/')[2:])
+                thisnbi['enabledsysids'] = \
+                    nbimageinfo['EnabledSystemIdentifiers']
+                thisnbi['id'] = \
+                    nbimageinfo['Index']
+                thisnbi['isdefault'] = \
+                    nbimageinfo['IsDefault']
+                thisnbi['length'] = \
+                    len(nbimageinfo['Name'])
+                thisnbi['name'] = \
+                    nbimageinfo['Name']
                 
                 # Add the parameters for the current NBI to nbioptions
                 nbioptions.append(thisnbi)
@@ -201,27 +210,31 @@ def getnbioptions(incoming):
         print "Unexpected error getnbioptions:", sys.exc_info()
         raise
     
-    return nbioptions
+    return nbioptions, nbisources
 
-def getsysidentitlement(nbisources, clientsysid):
+def getsysidentitlement(nbisources, clientsysid, bsdpmsgtype):
     """
         The getsysidentitlement function takes a list of previously compiled NBI
         sources and a clientsysid parameter to determine which of the entries in
         nbisources the clientsysid is entitled to.
         
         The function:
-        - Checks for the absence of both disabledsysids and enabledsysids:
-            - If no entries exist adds the NBI to nbientitlements.
-            
-        - Checks for one or more entries in enabledsysids:
-            - If one or more entries are found:
-                - Checks for duplicate clientsysid entries in disabledsysids:
-                    - If found, there is a configuration issue with
-                      NBImageInfo.plist and the NBI is skipped; a warning
-                      is thrown for the admin to act on.
-                    - If no dupes are found adds the NBI to nbientitlements.
-                    
-        - Skips all other NBI sources that do not match the above
+        - Initializes the 'hasdupes' variable as False.
+        - Checks for duplicate clientsysid entries in enabled/disabledsysids:
+            - If found, there is a configuration issue with
+              NBImageInfo.plist and thisnbi is skipped; a warning
+              is thrown for the admin to act on. The hasdupes variable will be
+              set to True.
+        - Checks if hasdupes is False:
+            - If True, continue with the tests below, otherwise iterate next.
+        - Checks for empty disabledsysids and enabledsysids lists:
+            - If both lists are zero length thisnbi is added to nbientitlements.
+        - Checks for a missing clientsysid entry in enabledsysids OR a matching
+          clientsysid entry in disabledsysids:
+            - If if either is True thisnbi is skipped.
+        - Checks for matching clientsysid entry in enabledsysids AND a missing
+          clientsysid entry in disabledsysids:
+            - If both are True thisnbi is added to nbientitlements.
     """
     
     # Globals are used to give other functions access to these later
@@ -236,39 +249,44 @@ def getsysidentitlement(nbisources, clientsysid):
     imagenameslist = []
 
     try:
-        # Iterate the NBI list
+        # Iterate over the NBI list
         for thisnbi in nbisources:
             
+            # First a sanity check for duplicate system ID entries
+            hasdupes = False
+            
+            if clientsysid in thisnbi['disabledsysids'] and \
+               clientsysid in thisnbi['enabledsysids']:
+                
+                # Duplicate entries are bad mkay, so skip this NBI and warn
+                print '!!! Image "' + thisnbi['name'] + \
+                        '" has duplicate system ID entries ' \
+                        'for model "' + clientsysid + '" - skipping !!!'
+                hasdupes = True
+
             # Check whether both disabledsysids and enabledsysids are empty and
             #   if so add the NBI to the list, there are no restrictions.
-            if len(thisnbi['disabledsysids']) == 0 and \
-               len(thisnbi['enabledsysids']) == 0:
-                print('Image "' + thisnbi['name'] + \
-                        '" has no model restrictions - adding to list')
-                nbientitlements.append(thisnbi)
-                
-            # Check for an entry in enabledsysids
-            elif clientsysid in thisnbi['enabledsysids']:
-                
-                # If found, check for a duplicate entry in disabledsysids
-                if clientsysid in thisnbi['disabledsysids']:
-                    
-                    # Duplicate entries are bad mkay, so skip this NBI and warn
-                    print('=====! Image "' + thisnbi['name'] + \
-                            '" contains both "enabled" and "disabled" entries \
-                            for model ' + clientsysid + ' - skipping !=====')
-                    pass
-                else:
-                    # If there was no duplicate entry in disabledsysids we're
-                    #   good, add NBI to nbientitlements
-                    print 'Found enabled system ID ' + clientsysid + \
-                            ' - adding "' + thisnbi['name'] + '" to list'
+            if not hasdupes:
+                if len(thisnbi['disabledsysids']) == 0 and \
+                   len(thisnbi['enabledsysids']) == 0:
+                    print('Image "' + thisnbi['name'] + \
+                            '" has no restrictions for model "' + clientsysid +\
+                            '" - adding to list')
                     nbientitlements.append(thisnbi)
-            else:
-                # Anything else is not an acceptable NBI, skip it
-                print('Found disabled system ID "' + clientsysid + \
-                        '" - skipping "' + thisnbi['name'] + '"')
-                pass
+                
+                # Check for a missing entry in enabledsysids, this means we skip
+                elif clientsysid not in thisnbi['enabledsysids'] or \
+                     clientsysid in thisnbi['disabledsysids']:
+                    print 'System ID "' + clientsysid + '" is disabled - ' \
+                          'skipping "' + thisnbi['name'] + '"'
+
+                # Check for an entry in enabledsysids
+                elif clientsysid in thisnbi['enabledsysids'] and \
+                     clientsysid not in thisnbi['disabledsysids']:
+                    print 'Found enabled system ID ' + clientsysid + \
+                          ' - adding "' + thisnbi['name'] + '" to list'
+                    nbientitlements.append(thisnbi)
+                    
     except:
         print "Unexpected error filtering image entitlements:", sys.exc_info()
         raise
@@ -277,6 +295,7 @@ def getsysidentitlement(nbisources, clientsysid):
         # Now we iterate through the entitled NBIs in search of a default
         #   image, as determined by its "IsDefault" key
         for image in nbientitlements:
+            hasdefault = False
             
             # Check for an isdefault entry in the current NBI
             if image['isdefault'] is True:
@@ -309,9 +328,10 @@ def getsysidentitlement(nbisources, clientsysid):
             
             # Construct the list by iterating over the imageid, converting to a
             #   16 bit string as we go, for proper packet encoding
-            imageid = [int(imageid[i:i+n], 16) for i in range(0, len(imageid), n)]
+            imageid = [int(imageid[i:i+n], 16) \
+                for i in range(0, len(imageid), n)]
             imagenameslist += [129,0] + imageid + [image['length']] + \
-                                strlist(image['name']).list()
+                              strlist(image['name']).list()
     except:
         print "Unexpected error setting default image:", sys.exc_info()
         raise
@@ -344,7 +364,8 @@ def parseoptions(bsdpoptions):
         optionlength = bsdpoptions[length]
         pointer = optionlength + length + 1
         
-        msgtypes[bsdpoptioncodes[bsdpoptions[start]]] = [length+1, bsdpoptions[length]]
+        msgtypes[bsdpoptioncodes[bsdpoptions[start]]] = \
+            [length+1, bsdpoptions[length]]
     
     # Now that we have decoded the raw BSDP options we iterate the msgtypes dict
     #   and pull its values, appending them to the optionvalues dict as we go
@@ -370,13 +391,15 @@ def ack(packet, defaultnbi, msgtype):
     
     try:
         # Get the requesting client's clientsysid from the BSDP options
-        clientsysid = str(strlist(packet.GetOption('vendor_class_identifier'))).split('/')[2]
-        
-        # Figure out the NBIs this clientsysid is entitled to
-        enablednbis = getsysidentitlement(nbiimages, clientsysid)
-        
+        clientsysid = \
+        str(strlist(packet.GetOption('vendor_class_identifier'))).split('/')[2]
+
         # Decode and parse the BSDP options from vendor_encapsulated_options
-        bsdpoptions = parseoptions(packet.GetOption('vendor_encapsulated_options'))
+        bsdpoptions = \
+            parseoptions(packet.GetOption('vendor_encapsulated_options'))
+
+        # Figure out the NBIs this clientsysid is entitled to
+        enablednbis = getsysidentitlement(nbiimages, clientsysid, msgtype)
         
         # The Startup Disk preference panel in OS X uses a randomized reply port
         #   instead of the standard port 68. We check for the existence of that
@@ -435,24 +458,28 @@ def ack(packet, defaultnbi, msgtype):
 
             # Encode the default NBI option (7) its standard length (4) and the
             #   16 bit string list representation of defaultnbi
-            defaultnbi = [7,4,129,0] + [int(defaultnbi[i:i+n], 16) for i in range(0, len(defaultnbi), n)]
+            defaultnbi = [7,4,129,0] + \
+            [int(defaultnbi[i:i+n], 16) for i in range(0, len(defaultnbi), n)]
             
             # And finally, once we have all the image list encoding taken care
             #   of, we plug them into the vendor_encapsulated_options DHCP
             #   option after the option header:
             #   - [1,1,1] = BSDP message type (1), length (1), value (1 = list)
-            #   - [4,2,128,256] = Max packet size type 4, length 2,
+            #   - [4,2,128,128] = Max packet size type 4, length 2,
             #       value 0x7fff (8192)
             #   - defaultnbi (option 7)
             #   - List of all available Image IDs (option 9)
             bsdpack.SetOption("vendor_encapsulated_options", \
-                                    strlist([1,1,1,4,2,128,256] + \
+                                    strlist([1,1,1,4,2,128,128] + \
                                     defaultnbi + \
                                     bsdpimagelist).list())
             
             # Some debugging to stdout
-            print '================================================================='
-            print "Return ACK[LIST] to " + str(clientip) + ' on ' + str(replyport)
+            print '============================================================'
+            print "Return ACK[LIST] to " + \
+                    str(clientip) + \
+                    ' on ' + \
+                    str(replyport)
             print "Default boot image ID: " + str(defaultnbi)
         except:
             print "Unexpected error ack() list:", sys.exc_info()
@@ -467,7 +494,7 @@ def ack(packet, defaultnbi, msgtype):
             imageid = int('%02X' % bsdpoptions['selected_boot_image'][2] + \
                             '%02X' % bsdpoptions['selected_boot_image'][3], 16)
         except:
-            print "Unexpected error ack() select:", sys.exc_info()
+            print "Unexpected error ack() select: imageid", sys.exc_info()
             raise
         
         # Initialize variables for the booter file (kernel) and the dmg path
@@ -475,30 +502,38 @@ def ack(packet, defaultnbi, msgtype):
         rootpath = ''
         
         # Iterate over enablednbis and retrieve the kernel and boot DMG for each
-        for nbidict in enablednbis:
-            try:
+        try:
+            for nbidict in enablednbis:
                 if nbidict['id'] == imageid:
                     booterfile = nbidict['booter']
                     rootpath = nfsrootpath + nbidict['dmg']
                     selectedimage = bsdpoptions['selected_boot_image']
-            except:
-                print "Unexpected error ack() selectedimage:", sys.exc_info()
-                raise
+        except:
+            print "Unexpected error ack() selectedimage:", sys.exc_info()
+            raise
         
         # Generate the rest of the BSDP[SELECT] ACK packet by encoding the
         #   name of the kernel (file), the TFTP path and the vendor encapsulated
         #   options:
         #   - [1,1,2] = BSDP message type (1), length (2), value (2 = select)
         #   - [8,4] = BSDP selected_image (8), length (4), encoded image ID
-        bsdpack.SetOption("file", strlist(booterfile.ljust(128,'\x00')).list())
-        bsdpack.SetOption("root_path", strlist(rootpath).list())
-        bsdpack.SetOption("vendor_encapsulated_options", strlist([1,1,2,8,4] + \
-                                                        selectedimage).list())
+        try:
+            bsdpack.SetOption("file", \
+                strlist(booterfile.ljust(128,'\x00')).list())
+            bsdpack.SetOption("root_path", strlist(rootpath).list())
+            bsdpack.SetOption("vendor_encapsulated_options", \
+                strlist([1,1,2,8,4] + selectedimage).list())
+        except:
+            print "Unexpected error ack() select SetOption:", sys.exc_info()
+            raise
         
         try:
             # Some debugging to stdout
             print '============================================================'
-            print "Return ACK[SELECT] to " + str(clientip) + ' on ' + str(replyport)
+            print "Return ACK[SELECT] to " + \
+                    str(clientip) + \
+                    ' on ' + \
+                    str(replyport)
             print "TFTP path: " + str(strlist(bsdpack.GetOption("file")))
         except:
             print "Unexpected error ack() select print debug:", sys.exc_info()
@@ -523,7 +558,13 @@ def main():
     
     # Do a one-time discovery of all available NBIs on the server. NBIs added
     #   after the server was started will not be picked up until after a restart
-    nbiimages = getnbioptions(tftprootpath)
+    nbiimages, nbisources = getnbioptions(tftprootpath)
+    
+    # Print the full list of eligible NBIs to the log
+    print '========== Using the following boot images =========='
+    for nbi in nbisources:
+        print nbi
+    print '==========     End boot image listing      =========='
     
     # Loop while the looping's good.
     while True:
@@ -573,4 +614,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

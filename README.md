@@ -43,6 +43,7 @@ Install and start the TFTP and NFS services and clone the required repositories:
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 $ sudo yum -y install xinetd tftp-server nfs-utils nfs-utils-lib git-core python python-devel
 $ sudo sed -i 's/\/var\/lib\/tftpboot/\/nbi/' /etc/xinetd.d/tftp
+$ sudo sed -i 's/\-s$//' /etc/xinetd.d/tftp
 $ sudo sh -c 'echo "/nbi   *(async,ro,no_root_squash,insecure)" >> /etc/exports'
 $ sudo mkdir /nbi
 $ sudo chkconfig --levels 235 nfs on
