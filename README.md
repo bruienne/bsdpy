@@ -146,8 +146,8 @@ below, with those not currently implemented in italic type:
 
     -   The selected NBI’s boot image URL using NFS or *HTTP*
 
--   *Apply available NBI filtering based on Mac model ID or MAC address entries
-    in NBImageInfo.plist*
+-   **Apply available NBI filtering based on Mac model ID or MAC address entries
+    in NBImageInfo.plist** This feature is now implemented. Please test it out.
 
 -   BSDP Option Codes:
 
