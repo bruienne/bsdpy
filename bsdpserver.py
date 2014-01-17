@@ -62,6 +62,7 @@ import socket, struct, fcntl
 import os, fnmatch
 import plistlib
 
+# A dict that holds mappings of the BSDP option codes for lookup later on
 bsdpoptioncodes = {1: 'message_type',
                    2: 'version',
                    3: 'server_identifier',
@@ -75,12 +76,17 @@ bsdpoptioncodes = {1: 'message_type',
                    11: 'boot_image_attributes',
                    12: 'max_message_size'}
 
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-sockfd = sock.fileno()
-SIOCGIFADDR = 0x8915
 
 
 def get_ip(iface=''):
+    """
+        The get_ip function retrieves the IP for the network interface BSDPY
+        is running on.
+    """
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sockfd = sock.fileno()
+    SIOCGIFADDR = 0x8915
+
     ifreq = struct.pack('16sH14s', iface, socket.AF_INET, '\x00' * 14)
     try:
         res = fcntl.ioctl(sockfd, SIOCGIFADDR, ifreq)
@@ -90,6 +96,8 @@ def get_ip(iface=''):
     return socket.inet_ntoa(ip)
 
 
+# Set the root path that NBIs will be served out of, either provided at runtime
+#   or using a default if none was given. Defaults to /nbi.
 if len(sys.argv) > 1:
     tftprootpath = sys.argv[1]
     print 'Using ' + tftprootpath + ' as root path'
@@ -97,6 +105,7 @@ else:
     tftprootpath = '/nbi'
     print 'Using ' + tftprootpath + ' as root path'
 
+# Get the server IP and hostname for use in in BSDP calls later on.
 try:
     serverip = map(int, get_ip('eth0').split('.'))
     serverhostname = socket.gethostname()
@@ -105,11 +114,18 @@ except:
     print 'Error setting serverip, serverhostname or nfsrootpath', sys.exc_info()
     raise
 
+# Some standard DHCP/BSDP options to set listen, server ports and what IP
+#   address to listen on. Default is 0.0.0.0 which means all requests are
+#   replied to if they are a BSDP[LIST] or BSDP[SELECT] packet.
 netopt = {'client_listen_port':"68",
            'server_listen_port':"67",
            'listen_address':"0.0.0.0"}
 
 
+# Invoke the DhcpServer class from pydhcplib and configure it, overloading the
+#   available class functions to only listen to DHCP INFORM packets, which is
+#   what BSDP uses to do its thing - HandleDhcpInform().
+# http://www.opensource.apple.com/source/bootp/bootp-268/Documentation/BSDP.doc
 class Server(DhcpServer):
     def __init__(self, options):
         DhcpServer.__init__(self,options["listen_address"],
@@ -121,6 +137,10 @@ class Server(DhcpServer):
 
 
 def find(pattern, path):
+    """
+        The find() function provides some basic file searching, used later
+        to look for available NBIs.
+    """
     result = []
     for root, dirs, files in os.walk(path):
         for name in files:
@@ -130,44 +150,194 @@ def find(pattern, path):
 
 
 def getnbioptions(incoming):
+    """
+        The getnbioptions() function walks through a given directory and
+        finds and parses compatible NBIs by looking for NBImageInfo.plist
+        files which are then processed with plistlib to extract an NBI's
+        configuration items that are needed later on to send to BSDP clients.
+        
+        It is assumed that the NBI root directory is laid out as follows:
+            /nbi/MyGreatImage.nbi
+            /nbi/AnotherNetBootImage.nbi
+    """
+    # Initialize lists to store NBIs and their options
     nbioptions = []
-    nbisources = []
+    # nbisources = []
     try:
         for path, dirs, files in os.walk(incoming):
+            # Create an empty dict that will hold an NBI's settings
             thisnbi = {}
             if path.count(os.sep) >= 2:
                 del dirs[:]
                 
-                nbisources.append(path)
+                # Found an eligible NBI source, add it to our nbisources list
+                # nbisources.append(path)
                 
+                # Search the path for an NBImageInfo.plist and parse it.
                 nbimageinfoplist = find('NBImageInfo.plist', path)[0]
                 nbimageinfo = plistlib.readPlist(nbimageinfoplist)
                 
-                thisnbi['dmg'] = '/'.join(find('*.dmg', path)[0].split('/')[2:])
+                # Pull NBI settings out of the plist for use later on:
+                #   booter = The kernel which is loaded with tftp
+                #   disabledsysids = System IDs to blacklist, optional
+                #   dmg = The actual OS image loaded after the booter
+                #   enabledsysids = System IDs to whitelist, optional
+                #   id = The NBI Identifier, must be unique
+                #   isdefault = Indicates the NBI is the default
+                #   length = Length of the NBI name, needed for BSDP packet
+                #   name = The name of the NBI
                 thisnbi['booter'] = find('booter', path)[0]
+                thisnbi['disabledsysids'] = nbimageinfo['DisabledSystemIdentifiers']
+                thisnbi['dmg'] = '/'.join(find('*.dmg', path)[0].split('/')[2:])
+                thisnbi['enabledsysids'] = nbimageinfo['EnabledSystemIdentifiers']
                 thisnbi['id'] = nbimageinfo['Index']
-                thisnbi['name'] = nbimageinfo['Name']
                 thisnbi['isdefault'] = nbimageinfo['IsDefault']
                 thisnbi['length'] = len(nbimageinfo['Name'])
+                thisnbi['name'] = nbimageinfo['Name']
                 
+                # Add the parameters for the current NBI to nbioptions
                 nbioptions.append(thisnbi)
     except:
-        print "Unexpected error:", sys.exc_info()
+        print "Unexpected error getnbioptions:", sys.exc_info()
         raise
-
-    print 'Boot images used in this session:\n************************************'
-    for nbi in nbisources:
-        print nbi
-    print '************************************'
     
     return nbioptions
 
+def getsysidentitlement(nbisources, clientsysid):
+    """
+        The getsysidentitlement function takes a list of previously compiled NBI
+        sources and a clientsysid parameter to determine which of the entries in
+        nbisources the clientsysid is entitled to.
+        
+        The function:
+        - Checks for the absence of both disabledsysids and enabledsysids:
+            - If no entries exist adds the NBI to nbientitlements.
+            
+        - Checks for one or more entries in enabledsysids:
+            - If one or more entries are found:
+                - Checks for duplicate clientsysid entries in disabledsysids:
+                    - If found, there is a configuration issue with
+                      NBImageInfo.plist and the NBI is skipped; a warning
+                      is thrown for the admin to act on.
+                    - If no dupes are found adds the NBI to nbientitlements.
+                    
+        - Skips all other NBI sources that do not match the above
+    """
+    
+    # Globals are used to give other functions access to these later
+    global defaultnbi
+    global imagenameslist
+    
+    print 'Determining image list for system ID ' + clientsysid
+    
+    # Initialize lists for nbientitlements and imagenameslist, both will
+    #   contain a series of dicts
+    nbientitlements = []
+    imagenameslist = []
+
+    try:
+        # Iterate the NBI list
+        for thisnbi in nbisources:
+            
+            # Check whether both disabledsysids and enabledsysids are empty and
+            #   if so add the NBI to the list, there are no restrictions.
+            if len(thisnbi['disabledsysids']) == 0 and \
+               len(thisnbi['enabledsysids']) == 0:
+                print('Image "' + thisnbi['name'] + \
+                        '" has no model restrictions - adding to list')
+                nbientitlements.append(thisnbi)
+                
+            # Check for an entry in enabledsysids
+            elif clientsysid in thisnbi['enabledsysids']:
+                
+                # If found, check for a duplicate entry in disabledsysids
+                if clientsysid in thisnbi['disabledsysids']:
+                    
+                    # Duplicate entries are bad mkay, so skip this NBI and warn
+                    print('=====! Image "' + thisnbi['name'] + \
+                            '" contains both "enabled" and "disabled" entries \
+                            for model ' + clientsysid + ' - skipping !=====')
+                    pass
+                else:
+                    # If there was no duplicate entry in disabledsysids we're
+                    #   good, add NBI to nbientitlements
+                    print 'Found enabled system ID ' + clientsysid + \
+                            ' - adding "' + thisnbi['name'] + '" to list'
+                    nbientitlements.append(thisnbi)
+            else:
+                # Anything else is not an acceptable NBI, skip it
+                print('Found disabled system ID "' + clientsysid + \
+                        '" - skipping "' + thisnbi['name'] + '"')
+                pass
+    except:
+        print "Unexpected error filtering image entitlements:", sys.exc_info()
+        raise
+    
+    try:
+        # Now we iterate through the entitled NBIs in search of a default
+        #   image, as determined by its "IsDefault" key
+        for image in nbientitlements:
+            
+            # Check for an isdefault entry in the current NBI
+            if image['isdefault'] is True:
+                
+                # By default defaultnbi is 0, so change it to the matched NBI's
+                #   id. If more than one is found (shouldn't) we use the highest
+                #   id found. This behavior may be changed if it proves to be
+                #   problematic, such as breaking out of the for loop instead.
+                if defaultnbi < image['id']:
+                    defaultnbi = image['id']
+                    hasdefault = True
+                    
+            # This is to match cases where there is  no default image found,
+            #   a possibility. In that case we use the highest found id as the
+            #   default. This too could be changed at a later time.
+            elif defaultnbi < image['id'] and not hasdefault:
+                defaultnbi = image['id']
+            
+            # Next we construct our imagenameslist which is a list of ints that
+            #   encodes the image id, total name length and its name for use
+            #   by the packet encoder
+            
+            # The imageid should be a zero-padded 4 byte string represented as
+            #   ints
+            imageid = '%04X' % image['id']
+            
+            # Our skip interval within the list; the "[129,0]" header each image
+            #   ID requires, we don't want to count it for the length
+            n = 2
+            
+            # Construct the list by iterating over the imageid, converting to a
+            #   16 bit string as we go, for proper packet encoding
+            imageid = [int(imageid[i:i+n], 16) for i in range(0, len(imageid), n)]
+            imagenameslist += [129,0] + imageid + [image['length']] + \
+                                strlist(image['name']).list()
+    except:
+        print "Unexpected error setting default image:", sys.exc_info()
+        raise
+    
+    # print 'Entitlements: ' + str(len(nbientitlements)) + '\n' + str(nbientitlements) + '\n'
+    # print imagenameslist
+    
+    # All done, pass the finalized list of NBIs the given clientsysid back
+    return nbientitlements
 
 def parseoptions(bsdpoptions):
+    """
+        The parseoptions function parses a given bsdpoptions list and decodes
+        the BSDP options contained within, giving them the proper names that
+        pydhcplib expects. References the bsdpoptioncodes dict that was defined
+        earlier on.
+    """
     optionvalues = {}
     msgtypes = {}
     pointer = 0
     
+    # Using a pointer we step through the given bsdpoptions. These are raw DHCP
+    #   packets we are decoding so this looks incredibly laborious, but the
+    #   input is a 16 bit list of encoded strings and options that needs to be
+    #   diced up according to the BSDP option encoding as set forth in the
+    #   Apple BSDP documentation.
     while pointer < len(bsdpoptions):
         start = pointer
         length = pointer + 1
@@ -176,6 +346,8 @@ def parseoptions(bsdpoptions):
         
         msgtypes[bsdpoptioncodes[bsdpoptions[start]]] = [length+1, bsdpoptions[length]]
     
+    # Now that we have decoded the raw BSDP options we iterate the msgtypes dict
+    #   and pull its values, appending them to the optionvalues dict as we go
     for msg, values in msgtypes.items():
         start = values[0]
         end = start + values[1]
@@ -187,23 +359,43 @@ def parseoptions(bsdpoptions):
 
 
 def ack(packet, defaultnbi, msgtype):
-    """docstring for createlistack"""
+    """
+        The ack function constructs either a BSDP[LIST] or BSDP[SELECT] ACK
+        DhcpPacket(), determined by the given msgtype, 'list' or 'select'.
+        It calls the previously defined getsysidentitlement() and parseoptions()
+        functions for either msgtype.
+    """
         
     bsdpack = DhcpPacket()
     
     try:
+        # Get the requesting client's clientsysid from the BSDP options
+        clientsysid = str(strlist(packet.GetOption('vendor_class_identifier'))).split('/')[2]
+        
+        # Figure out the NBIs this clientsysid is entitled to
+        enablednbis = getsysidentitlement(nbiimages, clientsysid)
+        
+        # Decode and parse the BSDP options from vendor_encapsulated_options
         bsdpoptions = parseoptions(packet.GetOption('vendor_encapsulated_options'))
-
+        
+        # The Startup Disk preference panel in OS X uses a randomized reply port
+        #   instead of the standard port 68. We check for the existence of that
+        #   option in the bsdpoptions dict and if found set replyport to it.
         if 'reply_port' in bsdpoptions:
-            replyport = int(str(format(bsdpoptions['reply_port'][0], 'x') + format(bsdpoptions['reply_port'][1], 'x')), 16)
+            replyport = int(str(format(bsdpoptions['reply_port'][0], 'x') + \
+                        format(bsdpoptions['reply_port'][1], 'x')), 16)
         else:
             replyport = 68
         
+        # Get the client's IP address, a standard DHCP option
         clientip = ipv4(packet.GetOption('ciaddr'))
     except:
-        print "Unexpected error:", sys.exc_info()[0]
+        print "Unexpected error: ack() common", sys.exc_info()
         raise
     
+    # We construct the rest of our common BSDP reply parameters according to
+    #   Apple's spec. The only noteworthy parameter here is sname, a zero-padded
+    #   64 byte string list containing the BSDP server's hostname.
     bsdpack.SetOption("op", [2])
     bsdpack.SetOption("htype", packet.GetOption('htype'))
     bsdpack.SetOption("hlen", packet.GetOption('hlen'))
@@ -217,108 +409,168 @@ def ack(packet, defaultnbi, msgtype):
     bsdpack.SetOption("server_identifier", serverip)
     bsdpack.SetOption("vendor_class_identifier", strlist('AAPLBSDPC').list())
     
+    # Process BSDP[LIST] requests
     if msgtype == 'list':
-        nameslength = 0
-        n = 2
-        
-        for i in nbiimages:
-            nameslength += i['length']
-        
-        totallength = len(nbiimages) * 5 + nameslength
-        bsdpimagelist = [9,totallength]
-        bsdpimagelist += imagenameslist
-        defaultnbi = '%04X' % defaultnbi
+        try:
+            nameslength = 0
+            n = 2
+            
+            # First calculate the total length of the names of all combined
+            #   NBIs, a required parameter that is part of the BSDP
+            #   vendor_encapsulated_options.
+            for i in enablednbis:
+                nameslength += i['length']
+            
+            # Next calculate the total length of all enabled NBIs
+            totallength = len(enablednbis) * 5 + nameslength
+            
+            # The bsdpimagelist var is inserted into vendor_encapsulated_options
+            #   and comprises of the option code (9), total length of options,
+            #   the IDs and names of all NBIs and the 4 byte string list that
+            #   contains the default NBI ID. Promise, all of this is part of
+            #   the BSDP spec, go look it up.
+            bsdpimagelist = [9,totallength]
+            bsdpimagelist += imagenameslist
+            defaultnbi = '%04X' % defaultnbi
 
-        try:
+            # Encode the default NBI option (7) its standard length (4) and the
+            #   16 bit string list representation of defaultnbi
             defaultnbi = [7,4,129,0] + [int(defaultnbi[i:i+n], 16) for i in range(0, len(defaultnbi), n)]
+            
+            # And finally, once we have all the image list encoding taken care
+            #   of, we plug them into the vendor_encapsulated_options DHCP
+            #   option after the option header:
+            #   - [1,1,1] = BSDP message type (1), length (1), value (1 = list)
+            #   - [4,2,128,256] = Max packet size type 4, length 2,
+            #       value 0x7fff (8192)
+            #   - defaultnbi (option 7)
+            #   - List of all available Image IDs (option 9)
+            bsdpack.SetOption("vendor_encapsulated_options", \
+                                    strlist([1,1,1,4,2,128,256] + \
+                                    defaultnbi + \
+                                    bsdpimagelist).list())
+            
+            # Some debugging to stdout
+            print '================================================================='
+            print "Return ACK[LIST] to " + str(clientip) + ' on ' + str(replyport)
+            print "Default boot image ID: " + str(defaultnbi)
         except:
-            print "Unexpected error:", sys.exc_info()
-        
-        bsdpack.SetOption("vendor_encapsulated_options", strlist([1,1,1,4,2,128,128] + defaultnbi + bsdpimagelist).list())
-        
-        print '================================================================='
-        print "Return ACK[LIST] to " + str(clientip) + ' on ' + str(replyport)
-        print "Default boot image ID: " + str(defaultnbi)
+            print "Unexpected error ack() list:", sys.exc_info()
+            raise
     
+    # Process BSDP[SELECT] requests
     elif msgtype == 'select':
+        
+        # Get the value of selected_boot_image as sent by the client and convert
+        #   the value for later use.
         try:
-            imageid = int('%02X' % bsdpoptions['selected_boot_image'][2] + '%02X' % bsdpoptions['selected_boot_image'][3], 16)
+            imageid = int('%02X' % bsdpoptions['selected_boot_image'][2] + \
+                            '%02X' % bsdpoptions['selected_boot_image'][3], 16)
         except:
-            print "Unexpected error:", sys.exc_info()
+            print "Unexpected error ack() select:", sys.exc_info()
             raise
         
+        # Initialize variables for the booter file (kernel) and the dmg path
         booterfile = ''
         rootpath = ''
         
-        for nbidict in nbiimages:
+        # Iterate over enablednbis and retrieve the kernel and boot DMG for each
+        for nbidict in enablednbis:
             try:
                 if nbidict['id'] == imageid:
                     booterfile = nbidict['booter']
                     rootpath = nfsrootpath + nbidict['dmg']
                     selectedimage = bsdpoptions['selected_boot_image']
             except:
-                print "Unexpected error:", sys.exc_info()
+                print "Unexpected error ack() selectedimage:", sys.exc_info()
                 raise
         
+        # Generate the rest of the BSDP[SELECT] ACK packet by encoding the
+        #   name of the kernel (file), the TFTP path and the vendor encapsulated
+        #   options:
+        #   - [1,1,2] = BSDP message type (1), length (2), value (2 = select)
+        #   - [8,4] = BSDP selected_image (8), length (4), encoded image ID
         bsdpack.SetOption("file", strlist(booterfile.ljust(128,'\x00')).list())
         bsdpack.SetOption("root_path", strlist(rootpath).list())
-        bsdpack.SetOption("vendor_encapsulated_options", strlist([1,1,2,8,4] + selectedimage).list())
+        bsdpack.SetOption("vendor_encapsulated_options", strlist([1,1,2,8,4] + \
+                                                        selectedimage).list())
         
-        print '================================================================='
-        print "Return ACK[SELECT] to " + str(clientip) + ' on ' + str(replyport)
-
+        try:
+            # Some debugging to stdout
+            print '============================================================'
+            print "Return ACK[SELECT] to " + str(clientip) + ' on ' + str(replyport)
+            print "TFTP path: " + str(strlist(bsdpack.GetOption("file")))
+        except:
+            print "Unexpected error ack() select print debug:", sys.exc_info()
+            raise
+    
+    # Return the finished packet, client IP and reply port back to the caller
     return bsdpack, clientip, replyport
 
 imagenameslist = []
 nbiimages = []
+defaultnbi = 0
 
 def main():
     """Main routine. Do the work."""
-    global imagenameslist
+    
+    # We are changing nbiimages for user by other functions
     global nbiimages
     
+    # Instantiate a basic pydhcplib DhcpServer class using netopts (listen port,
+    #   reply port and listening IP)
     server = Server(netopt)
+    
+    # Do a one-time discovery of all available NBIs on the server. NBIs added
+    #   after the server was started will not be picked up until after a restart
     nbiimages = getnbioptions(tftprootpath)
-    defaultnbi = 0
     
-    try:
-        for image in nbiimages:
-            if image['isdefault'] is True:
-                if defaultnbi < image['id']:
-                    defaultnbi = image['id']
-
-            imageid = '%04X' % image['id']
-            n = 2
-            imageid = [int(imageid[i:i+n], 16) for i in range(0, len(imageid), n)]
-            imagenameslist += [129,0] + imageid + [image['length']] + strlist(image['name']).list()
-    except:
-        print "Unexpected error:", sys.exc_info()
-        raise
-    
+    # Loop while the looping's good.
     while True:
         
+        # Listen for DHCP packets
         packet = server.GetNextDhcpPacket()
         
         try:
+            # Check to see if any vendor_encapsulated_options are present
             if len(packet.GetOption('vendor_encapsulated_options')) > 1:
+                
+                # If we have vendor_encapsulated_options check for a value of 1
+                #   which in BSDP terms means the packet is a BSDP[LIST] request
                 if packet.GetOption('vendor_encapsulated_options')[2] == 1:
-                    print '********************************************************'
+                    print '****************************************************'
                     print 'Got BSDP INFORM[LIST] packet: '
                     
-                    bsdplistack, clientip, replyport = ack(packet, defaultnbi, 'list')
-                    server.SendDhcpPacketTo(bsdplistack, str(clientip), replyport)
+                    # Pass ack() the matching packet, defaultnbi and 'list'
+                    bsdplistack, clientip, replyport = ack(packet, \
+                                                            defaultnbi, \
+                                                            'list')
+                    # Once we have a finished DHCP packet, send it to the client
+                    server.SendDhcpPacketTo(bsdplistack, str(clientip), \
+                                                            replyport)
                 
+                # If the vendor_encapsulated_options BSDP type is 2, we process
+                #   the packet as a BSDP[SELECT] request
                 elif packet.GetOption('vendor_encapsulated_options')[2] == 2:
-                    print '********************************************************'
+                    print '****************************************************'
                     print 'Got BSDP INFORM[SELECT] packet: '
                     
-                    bsdpselectack, selectackclientip, selectackreplyport = ack(packet, None, 'select')
-                    server.SendDhcpPacketTo(bsdpselectack, str(selectackclientip), selectackreplyport)
-                
+                    
+                    bsdpselectack, selectackclientip, selectackreplyport = \
+                        ack(packet, None, 'select')
+                    
+                    # Once we have a finished DHCP packet, send it to the client
+                    server.SendDhcpPacketTo(bsdpselectack, \
+                                            str(selectackclientip), \
+                                            selectackreplyport)
+                # If the packet length is 7 or less, move on, BSDP packets are
+                #   at least 8 bytes long.
                 elif len(packet.GetOption('vendor_encapsulated_options')) <= 7:
                     pass
         except:
+            # Error? No worries, keep going.
             pass
 
 if __name__ == '__main__':
     main()
+

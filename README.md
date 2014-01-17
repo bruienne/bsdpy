@@ -190,7 +190,7 @@ below, with those not currently implemented in italic type:
 ### Copyright and licensing
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Copyright 2013 The Regents of the University of Michigan
+Copyright 2014 The Regents of the University of Michigan
 
 Licensed under the Apache License, Version 2.0 (the "License");    you may not use this file except in compliance with the License.    You may obtain a copy of the License at  
 
