@@ -150,9 +150,9 @@ def find(pattern, path):
     return result
 
 
-def getnbioptions(incoming):
+def getNbiOptions(incoming):
     """
-        The getnbioptions() function walks through a given directory and
+        The getNbiOptions() function walks through a given directory and
         finds and parses compatible NBIs by looking for NBImageInfo.plist
         files which are then processed with plistlib to extract an NBI's
         configuration items that are needed later on to send to BSDP clients.
@@ -207,14 +207,14 @@ def getnbioptions(incoming):
                 # Add the parameters for the current NBI to nbioptions
                 nbioptions.append(thisnbi)
     except:
-        print "Unexpected error getnbioptions:", sys.exc_info()
+        print "Unexpected error getNbiOptions:", sys.exc_info()
         raise
     
     return nbioptions, nbisources
 
-def getsysidentitlement(nbisources, clientsysid, bsdpmsgtype):
+def getSysIdEntitlement(nbisources, clientsysid, bsdpmsgtype):
     """
-        The getsysidentitlement function takes a list of previously compiled NBI
+        The getSysIdEntitlement function takes a list of previously compiled NBI
         sources and a clientsysid parameter to determine which of the entries in
         nbisources the clientsysid is entitled to.
         
@@ -342,9 +342,9 @@ def getsysidentitlement(nbisources, clientsysid, bsdpmsgtype):
     # All done, pass the finalized list of NBIs the given clientsysid back
     return nbientitlements
 
-def parseoptions(bsdpoptions):
+def parseOptions(bsdpoptions):
     """
-        The parseoptions function parses a given bsdpoptions list and decodes
+        The parseOptions function parses a given bsdpoptions list and decodes
         the BSDP options contained within, giving them the proper names that
         pydhcplib expects. References the bsdpoptioncodes dict that was defined
         earlier on.
@@ -383,7 +383,7 @@ def ack(packet, defaultnbi, msgtype):
     """
         The ack function constructs either a BSDP[LIST] or BSDP[SELECT] ACK
         DhcpPacket(), determined by the given msgtype, 'list' or 'select'.
-        It calls the previously defined getsysidentitlement() and parseoptions()
+        It calls the previously defined getSysIdEntitlement() and parseOptions()
         functions for either msgtype.
     """
         
@@ -396,10 +396,10 @@ def ack(packet, defaultnbi, msgtype):
 
         # Decode and parse the BSDP options from vendor_encapsulated_options
         bsdpoptions = \
-            parseoptions(packet.GetOption('vendor_encapsulated_options'))
+            parseOptions(packet.GetOption('vendor_encapsulated_options'))
 
         # Figure out the NBIs this clientsysid is entitled to
-        enablednbis = getsysidentitlement(nbiimages, clientsysid, msgtype)
+        enablednbis = getSysIdEntitlement(nbiimages, clientsysid, msgtype)
         
         # The Startup Disk preference panel in OS X uses a randomized reply port
         #   instead of the standard port 68. We check for the existence of that
@@ -558,7 +558,7 @@ def main():
     
     # Do a one-time discovery of all available NBIs on the server. NBIs added
     #   after the server was started will not be picked up until after a restart
-    nbiimages, nbisources = getnbioptions(tftprootpath)
+    nbiimages, nbisources = getNbiOptions(tftprootpath)
     
     # Print the full list of eligible NBIs to the log
     print '========== Using the following boot images =========='
