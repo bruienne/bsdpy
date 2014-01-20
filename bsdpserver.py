@@ -508,6 +508,7 @@ def ack(packet, defaultnbi, msgtype):
                     booterfile = nbidict['booter']
                     rootpath = nfsrootpath + nbidict['dmg']
                     selectedimage = bsdpoptions['selected_boot_image']
+                    print 'DEBUG--->' + str(selectedimage)
         except:
             print "Unexpected error ack() selectedimage:", sys.exc_info()
             raise
