@@ -401,6 +401,7 @@ def ack(packet, defaultnbi, msgtype):
         # Figure out the NBIs this clientsysid is entitled to
         enablednbis = getSysIdEntitlement(nbiimages, clientsysid, msgtype)
         
+        
         # The Startup Disk preference panel in OS X uses a randomized reply port
         #   instead of the standard port 68. We check for the existence of that
         #   option in the bsdpoptions dict and if found set replyport to it.
@@ -500,6 +501,7 @@ def ack(packet, defaultnbi, msgtype):
         # Initialize variables for the booter file (kernel) and the dmg path
         booterfile = ''
         rootpath = ''
+        selectedimage = ''
         
         # Iterate over enablednbis and retrieve the kernel and boot DMG for each
         try:
