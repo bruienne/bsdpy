@@ -509,8 +509,8 @@ def ack(packet, defaultnbi, msgtype):
                     str(clientip) + \
                     ' on ' + \
                     str(replyport))
-            if hasnulldefault is False: logging.debug("Default boot image ID: " +
-                                              str(defaultnbi))
+            if hasnulldefault is False: logging.debug("Default boot image ID:" +
+                                              str(defaultnbi[2:]))
         except:
             logging.debug("Unexpected error ack() list:", sys.exc_info())
             raise
