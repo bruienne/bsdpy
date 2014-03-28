@@ -61,8 +61,21 @@ from pydhcplib.dhcp_network import *
 import socket, struct, fcntl
 import os, fnmatch
 import plistlib
-import logging
+import logging, optparse
+from docopt import docopt
 
+usage = """Usage: bsdpyserver.py [-p <path>] [-r <protocol>] [-i <interface>]
+
+Run the BSDP server and handle requests from client. Optional parameters are
+the root path to serve NBIs from, the protocol to serve them with and the
+interface to run on. 
+
+Options:
+ -h --help               This screen.
+ -p --path <path>        The path to serve NBIs from. [default: /nbi]
+ -r --proto <protocol>   The protocol to serve NBIs with. [default: http]
+ -i --iface <interface>  The interface to bind to. [default: eth0]
+"""
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s: %(message)s',
                     level=logging.DEBUG,
@@ -84,7 +97,12 @@ bsdpoptioncodes = {1: 'message_type',
                    11: 'boot_image_attributes',
                    12: 'max_message_size'}
 
-
+# Some standard DHCP/BSDP options to set listen, server ports and what IP
+#   address to listen on. Default is 0.0.0.0 which means all requests are
+#   replied to if they are a BSDP[LIST] or BSDP[SELECT] packet.
+netopt = {'client_listen_port':"68",
+           'server_listen_port':"67",
+           'listen_address':"0.0.0.0"}
 
 def get_ip(iface=''):
     """
@@ -103,32 +121,31 @@ def get_ip(iface=''):
     ip = struct.unpack('16sH2x4s8x', res)[2]
     return socket.inet_ntoa(ip)
 
+arguments = docopt(usage, version='0.0.1')
 
-# Set the root path that NBIs will be served out of, either provided at runtime
-#   or using a default if none was given. Defaults to /nbi.
-if len(sys.argv) > 1:
-    tftprootpath = sys.argv[1]
-    logging.debug('Using ' + tftprootpath + ' as root path')
-else:
-    tftprootpath = '/nbi'
-    logging.debug('Using ' + tftprootpath + ' as root path')
+# Set the root path that NBIs will be served out of, either provided at
+#  runtime or using a default if none was given. Defaults to /nbi.
+
+tftprootpath = arguments['--path']
+bootproto = arguments['--proto']
+serverinterface = arguments['--iface']
 
 # Get the server IP and hostname for use in in BSDP calls later on.
 try:
-    serverip = map(int, get_ip('eth0').split('.'))
+    # serverinterface = get_default_gateway_linux()
+    serverip = map(int, get_ip(serverinterface).split('.'))
     serverhostname = socket.gethostname()
-    nfsrootpath = 'nfs:' + get_ip('eth0') + ':' + tftprootpath + ':'
+    if http in bootproto:
+        basedmgpath = 'http://' + '.'.join(map(str, serverip)) + '/'
+    if nfs in bootproto:
+        basedmgpath = 'nfs:' + '.'.join(map(str, serverip)) + ':' + \
+                       tftprootpath + ':'
+    print 'Server IP: ' + '.'.join(map(str, serverip)) + ' - Serving on ' \
+            + serverinterface + ' - Using ' + bootproto
 except:
-    logging.debug('Error setting serverip, serverhostname or nfsrootpath', \
+    logging.debug('Error setting serverip, serverhostname or basedmgpath', \
             sys.exc_info())
     raise
-
-# Some standard DHCP/BSDP options to set listen, server ports and what IP
-#   address to listen on. Default is 0.0.0.0 which means all requests are
-#   replied to if they are a BSDP[LIST] or BSDP[SELECT] packet.
-netopt = {'client_listen_port':"68",
-           'server_listen_port':"67",
-           'listen_address':"0.0.0.0"}
 
 
 # Invoke the DhcpServer class from pydhcplib and configure it, overloading the
@@ -180,6 +197,7 @@ def getNbiOptions(incoming):
                 del dirs[:]
                 
                 # Search the path for an NBImageInfo.plist and parse it.
+                logging.debug('Considering NBI source at ' + str(path))
                 nbimageinfoplist = find('NBImageInfo.plist', path)[0]
                 nbimageinfo = plistlib.readPlist(nbimageinfoplist)
                 
@@ -218,7 +236,7 @@ def getNbiOptions(incoming):
                 # Found an eligible NBI source, add it to our nbisources list
                 nbisources.append(path)
     except:
-        logging.debug("Unexpected error getNbiOptions:", sys.exc_info())
+        logging.debug("Unexpected error getNbiOptions:", str(sys.exc_info()))
         raise
     
     return nbioptions, nbisources
@@ -282,8 +300,7 @@ def getSysIdEntitlement(nbisources, clientsysid, bsdpmsgtype):
                 if len(thisnbi['disabledsysids']) == 0 and \
                    len(thisnbi['enabledsysids']) == 0:
                     logging.debug('Image "' + thisnbi['name'] + \
-                            '" has no restrictions for model "' + clientsysid +\
-                            '" - adding to list')
+                            '" has no restrictions, adding to list')
                     nbientitlements.append(thisnbi)
                 
                 # Check for a missing entry in enabledsysids, this means we skip
@@ -417,7 +434,7 @@ def ack(packet, defaultnbi, msgtype):
 
         # Figure out the NBIs this clientsysid is entitled to
         enablednbis = getSysIdEntitlement(nbiimages, clientsysid, msgtype)
-        
+
         # The Startup Disk preference panel in OS X uses a randomized reply port
         #   instead of the standard port 68. We check for the existence of that
         #   option in the bsdpoptions dict and if found set replyport to it.
@@ -432,6 +449,8 @@ def ack(packet, defaultnbi, msgtype):
     except:
         logging.debug("Unexpected error: ack() common", sys.exc_info())
         raise
+    
+    #print 'Configuring common BSDP packet options'
     
     # We construct the rest of our common BSDP reply parameters according to
     #   Apple's spec. The only noteworthy parameter here is sname, a zero-padded
@@ -451,6 +470,7 @@ def ack(packet, defaultnbi, msgtype):
     
     # Process BSDP[LIST] requests
     if msgtype == 'list':
+        #print 'Creating LIST packet'
         try:
             nameslength = 0
             n = 2
@@ -509,7 +529,7 @@ def ack(packet, defaultnbi, msgtype):
                     str(clientip) + \
                     ' on ' + \
                     str(replyport))
-            if hasnulldefault is False: logging.debug("Default boot image ID:" +
+            if hasnulldefault is False: logging.debug("Default boot image ID: " +
                                               str(defaultnbi[2:]))
         except:
             logging.debug("Unexpected error ack() list:", sys.exc_info())
@@ -517,7 +537,7 @@ def ack(packet, defaultnbi, msgtype):
     
     # Process BSDP[SELECT] requests
     elif msgtype == 'select':
-        
+        #print 'Creating SELECT packet'
         # Get the value of selected_boot_image as sent by the client and convert
         #   the value for later use.
         try:
@@ -538,7 +558,8 @@ def ack(packet, defaultnbi, msgtype):
             for nbidict in enablednbis:
                 if nbidict['id'] == imageid:
                     booterfile = nbidict['booter']
-                    rootpath = nfsrootpath + nbidict['dmg']
+                    rootpath = basedmgpath + nbidict['dmg']
+                    logging.debug('-->> Using HTTP URI: ' + str(rootpath))
                     selectedimage = bsdpoptions['selected_boot_image']
                     logging.debug('ACK[SELECT] image ID: ' + str(selectedimage))
         except:
@@ -654,3 +675,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
