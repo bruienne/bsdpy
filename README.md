@@ -41,9 +41,10 @@ created mine using Vagrant.
 Install and start the TFTP and NFS services and clone the required repositories:
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-$ sudo yum -y install xinetd tftp-server nfs-utils nfs-utils-lib git-core python python-devel
+$ sudo yum -y install gcc xinetd tftp-server nfs-utils nfs-utils-lib git-core python python-devel
 $ sudo sed -i 's/\/var\/lib\/tftpboot/\/nbi/' /etc/xinetd.d/tftp
-$ sudo sed -i 's/\-s$//' /etc/xinetd.d/tftp
+$ sudo sed -i 's/\-s//' /etc/xinetd.d/tftp
+$ sudo sed -i 's/SELINUX=.*/SELINUX=disabled/' /etc/sysconfig/selinux
 $ sudo sh -c 'echo "/nbi   *(async,ro,no_root_squash,insecure)" >> /etc/exports'
 $ sudo mkdir /nbi
 $ sudo chkconfig --levels 235 nfs on
@@ -52,7 +53,7 @@ $ sudo chkconfig --levels 235 tftp on
 $ sudo chkconfig --levels 235 iptables off
 $ sudo service nfs start
 $ sudo service xinetd start
-$ git clone https://bruienne@bitbucket.org/bruienne/bsdpy.git
+$ git clone https://bitbucket.org/bruienne/bsdpy.git
 $ git clone https://github.com/bruienne/pydhcplib.git
 $ cd pydhcplib
 $ sudo python setup.py install
