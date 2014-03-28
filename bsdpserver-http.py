@@ -135,7 +135,11 @@ try:
     # serverinterface = get_default_gateway_linux()
     serverip = map(int, get_ip(serverinterface).split('.'))
     serverhostname = socket.gethostname()
-    basedmgpath = 'http://' + '.'.join(map(str, serverip)) + ':8000/'
+    if http in bootproto:
+        basedmgpath = 'http://' + '.'.join(map(str, serverip)) + '/'
+    if nfs in bootproto:
+        basedmgpath = 'nfs:' + '.'.join(map(str, serverip)) + ':' + \
+                       tftprootpath + ':'
     print 'Server IP: ' + '.'.join(map(str, serverip)) + ' - Serving on ' \
             + serverinterface + ' - Using ' + bootproto
 except:
@@ -671,4 +675,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
