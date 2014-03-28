@@ -71,9 +71,9 @@ the root path to serve NBIs from, the protocol to serve them with and the
 interface to run on. 
 
 Options:
- -h --help                   This screen.
- -p --path <path>            The path to serve NBIs from. [default: /nbi]
- -r --proto <protocol>       The protocol to serve NBIs with. [default: http]
+ -h --help               This screen.
+ -p --path <path>        The path to serve NBIs from. [default: /nbi]
+ -r --proto <protocol>   The protocol to serve NBIs with. [default: http]
  -i --iface <interface>  The interface to bind to. [default: eth0]
 """
 
