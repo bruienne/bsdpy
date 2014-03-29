@@ -134,7 +134,12 @@ serverinterface = arguments['--iface']
 try:
     # serverinterface = get_default_gateway_linux()
     serverip = map(int, get_ip(serverinterface).split('.'))
-    serverhostname = socket.gethostname()
+    if os.environ.get('BSDPY_IP'):
+        serverip = map(int, os.environ['BSDPY_IP'].split('.'))
+        logging.debug('Found BSDPY_IP env var %s - not using our own' % serverip)
+    else:
+        serverip = map(int, get_ip(serverinterface).split('.'))
+        logging.debug('No BSDPY_IP env var found, using our own')
     if 'http' in bootproto:
         basedmgpath = 'http://' + '.'.join(map(str, serverip)) + '/'
     if 'nfs' in bootproto:
