@@ -135,7 +135,7 @@ try:
     # serverinterface = get_default_gateway_linux()
     serverip = map(int, get_ip(serverinterface).split('.'))
     if os.environ.get('BSDPY_IP'):
-        basedmgserver = map(int, os.environ.get('BSDPY_IP').split('.'))
+        basedmgserver = os.environ.get('BSDPY_IP')
         logging.debug('Found BSDPY_IP env var %s - not using our own' % 
                         os.environ.get('BSDPY_IP'))
     else:
