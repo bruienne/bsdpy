@@ -135,15 +135,17 @@ try:
     # serverinterface = get_default_gateway_linux()
     serverip = map(int, get_ip(serverinterface).split('.'))
     if os.environ.get('BSDPY_IP'):
-        serverip = map(int, os.environ['BSDPY_IP'].split('.'))
-        logging.debug('Found BSDPY_IP env var %s - not using our own' % serverip)
+        basedmgserver = map(int, os.environ.get('BSDPY_IP').split('.'))
+        logging.debug('Found BSDPY_IP env var %s - not using our own' % 
+                        os.environ.get('BSDPY_IP'))
     else:
-        serverip = map(int, get_ip(serverinterface).split('.'))
-        logging.debug('No BSDPY_IP env var found, using our own')
+        basedmgserver = serverip
+        logging.debug('No BSDPY_IP env var found, using IP from %s interface'
+                        % serverinterface)
     if 'http' in bootproto:
-        basedmgpath = 'http://' + '.'.join(map(str, serverip)) + '/'
+        basedmgpath = 'http://' + '.'.join(map(str, basedmgserver)) + '/'
     if 'nfs' in bootproto:
-        basedmgpath = 'nfs:' + '.'.join(map(str, serverip)) + ':' + \
+        basedmgpath = 'nfs:' + '.'.join(map(str, basedmgserver)) + ':' + \
                        tftprootpath + ':'
     print 'Server IP: ' + '.'.join(map(str, serverip)) + ' - Serving on ' \
             + serverinterface + ' - Using ' + bootproto
