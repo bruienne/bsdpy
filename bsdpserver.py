@@ -145,8 +145,10 @@ try:
                         % serverinterface)
     if 'http' in bootproto:
         basedmgpath = 'http://' + basedmgserver + '/'
+        logging.debug('Using HTTP basedmgpath %s' % basedmgpath)
     if 'nfs' in bootproto:
         basedmgpath = 'nfs:' + basedmgserver + ':' + tftprootpath + ':'
+        logging.debug('Using NFS basedmgpath %s' % basedmgpath)
     print 'Server IP: ' + '.'.join(map(str, serverip)) + ' - Serving on ' \
             + serverinterface + ' - Using ' + bootproto
 except:
