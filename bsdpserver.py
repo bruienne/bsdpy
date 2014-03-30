@@ -140,14 +140,13 @@ try:
         logging.debug('Found BSDPY_IP env var %s - not using our own' % 
                         os.environ.get('BSDPY_IP'))
     else:
-        basedmgserver = serverip
+        basedmgserver = '.'.join(map(str, serverip))
         logging.debug('No BSDPY_IP env var found, using IP from %s interface'
                         % serverinterface)
     if 'http' in bootproto:
-        basedmgpath = 'http://' + '.'.join(map(str, basedmgserver)) + '/'
+        basedmgpath = 'http://' + basedmgserver + '/'
     if 'nfs' in bootproto:
-        basedmgpath = 'nfs:' + '.'.join(map(str, basedmgserver)) + ':' + \
-                       tftprootpath + ':'
+        basedmgpath = 'nfs:' + basedmgserver + ':' + tftprootpath + ':'
     print 'Server IP: ' + '.'.join(map(str, serverip)) + ' - Serving on ' \
             + serverinterface + ' - Using ' + bootproto
 except:
