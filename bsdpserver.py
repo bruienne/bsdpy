@@ -134,6 +134,7 @@ serverinterface = arguments['--iface']
 try:
     # serverinterface = get_default_gateway_linux()
     serverip = map(int, get_ip(serverinterface).split('.'))
+    serverhostname = socket.gethostname()
     if os.environ.get('BSDPY_IP'):
         basedmgserver = os.environ.get('BSDPY_IP')
         logging.debug('Found BSDPY_IP env var %s - not using our own' % 
