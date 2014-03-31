@@ -149,8 +149,8 @@ try:
         if 'nfs' in bootproto:
             basedmgpath = 'nfs:' + basedmgserver + ':' + tftprootpath + ':'
             logging.debug('Using NFS basedmgpath %s' % basedmgpath)
-    print 'Server IP: ' + '.'.join(map(str, serverip)) + ' - Serving on ' \
-            + serverinterface + ' - Using ' + bootproto
+    logging.debug('Server IP: ' + '.'.join(map(str, serverip)) + ' - Serving on ' \
+            + serverinterface + ' - Using ' + bootproto)
 except:
     logging.debug('Error setting serverip, serverhostname or basedmgpath', \
             sys.exc_info())
