@@ -143,12 +143,12 @@ try:
         basedmgserver = '.'.join(map(str, serverip))
         logging.debug('No BSDPY_IP env var found, using IP from %s interface'
                         % serverinterface)
-        if 'http' in bootproto:
-            basedmgpath = 'http://' + basedmgserver + '/'
-            logging.debug('Using HTTP basedmgpath %s' % basedmgpath)
-        if 'nfs' in bootproto:
-            basedmgpath = 'nfs:' + basedmgserver + ':' + tftprootpath + ':'
-            logging.debug('Using NFS basedmgpath %s' % basedmgpath)
+    if 'http' in bootproto:
+        basedmgpath = 'http://' + basedmgserver + '/'
+        logging.debug('Using HTTP basedmgpath %s' % basedmgpath)
+    if 'nfs' in bootproto:
+        basedmgpath = 'nfs:' + basedmgserver + ':' + tftprootpath + ':'
+        logging.debug('Using NFS basedmgpath %s' % basedmgpath)
     logging.debug('Server IP: ' + '.'.join(map(str, serverip)) + ' - Serving on ' \
             + serverinterface + ' - Using ' + bootproto)
 except:
