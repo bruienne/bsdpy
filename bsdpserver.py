@@ -133,26 +133,33 @@ serverinterface = arguments['--iface']
 # Get the server IP and hostname for use in in BSDP calls later on.
 try:
     # serverinterface = get_default_gateway_linux()
-    serverip = map(int, get_ip(serverinterface).split('.'))
-    serverhostname = socket.gethostname()
-    if os.environ.get('BSDPY_IP'):
-        basedmgserver = os.environ.get('BSDPY_IP')
-        logging.debug('Found BSDPY_IP env var %s - not using our own' % 
-                        os.environ.get('BSDPY_IP'))
+    serverhostname = socket.getfqdn()
+    if os.environ.get('DOCKER_BSDPY_IP'):
+        # basedmgserver = os.environ.get('BSDPY_IP')
+        externalip = os.environ.get('DOCKER_BSDPY_IP')
+        serverip = map(int, externalip.split('.'))
+        serverip_str = externalip
+        logging.debug('Found $DOCKER_BSDPY_IP - using custom external IP %s'
+                        % externalip)
     else:
-        basedmgserver = '.'.join(map(str, serverip))
+        # basedmgserver = '.'.join(map(str, serverip))
+        myip = get_ip(serverinterface)
+        serverip = map(int, myip.split('.'))
+        serverip_str = myip
         logging.debug('No BSDPY_IP env var found, using IP from %s interface'
                         % serverinterface)
     if 'http' in bootproto:
-        basedmgpath = 'http://' + basedmgserver + '/'
+        basedmgpath = 'http://' + serverip_str + '/'
         logging.debug('Using HTTP basedmgpath %s' % basedmgpath)
     if 'nfs' in bootproto:
-        basedmgpath = 'nfs:' + basedmgserver + ':' + tftprootpath + ':'
+        basedmgpath = 'nfs:' + serverip_str + ':' + tftprootpath + ':'
         logging.debug('Using NFS basedmgpath %s' % basedmgpath)
-    logging.debug('Server IP: ' + '.'.join(map(str, serverip)) + ' - Serving on ' \
-            + serverinterface + ' - Using ' + bootproto)
+    logging.debug('Server IP: ' + serverip_str + ' - ' +
+                    'Server FQDN: ' + serverhostname + ' - ' +
+                    'Serving on ' + serverinterface + ' - ' +
+                    'Using ' + bootproto + ' to serve boot image.')
 except:
-    logging.debug('Error setting serverip, serverhostname or basedmgpath', \
+    logging.debug('Error setting serverip, serverhostname or basedmgpath',
             sys.exc_info())
     raise
 
