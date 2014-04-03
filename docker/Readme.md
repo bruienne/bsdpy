@@ -22,6 +22,4 @@ storage container can then be moved around to other hosts manually or by
 pushing it to an internal Docker repository and running a "docker run -d
 myorg/NBI:latest" on other hosts that will host BSDP services.
 
-    docker run -v /nbi -name NetBootSP0 busybox true
-
-    docker run -d -p 67:67/udp -p 69:69/udp -p 80:80 -e DOCKER_BSDPY_IP=10.0.1.193 --volumes-from NBI bruienne/bsdpy:latest
+    $ docker run -d -p 67:67/udp -p 69:69/udp -p 80:80 -e DOCKER_BSDPY_IP=<EXTERNAL-IP> --volumes-from NBI bruienne/bsdpy:latest
