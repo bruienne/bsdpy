@@ -315,7 +315,7 @@ def getSysIdEntitlement(nbisources, clientsysid, bsdpmsgtype):
             # Check whether both disabledsysids and enabledsysids are empty and
             #   if so add the NBI to the list, there are no restrictions.
             if not hasdupes:
-                if len(thisnbi['disabledsysids']) == 0 and 
+                if len(thisnbi['disabledsysids']) == 0 and \
                    len(thisnbi['enabledsysids']) == 0:
                     logging.debug('Image "' + thisnbi['name'] + 
                             '" has no restrictions, adding to list')
