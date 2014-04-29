@@ -214,8 +214,11 @@ def getNbiOptions(incoming):
 
                 # Search the path for an NBImageInfo.plist and parse it.
                 logging.debug('Considering NBI source at ' + str(path))
-                nbimageinfoplist = find('NBImageInfo.plist', path)[0]
-                nbimageinfo = plistlib.readPlist(nbimageinfoplist)
+                nbimageinfoplist = find('NBImageInfo.plist', path)
+                if not nbimageinfoplist:
+                       logging.debug('No NBImageInfo.plist found')
+                       break
+                nbimageinfo = plistlib.readPlist(nbimageinfoplist[0])
 
                 # Pull NBI settings out of the plist for use later on:
                 #   booter = The kernel which is loaded with tftp
