@@ -159,7 +159,7 @@ try:
                     'Serving on ' + serverinterface + ' - ' +
                     'Using ' + bootproto + ' to serve boot image.')
 except:
-    logging.debug('Error setting serverip, serverhostname or basedmgpath',
+    logging.debug('Error setting serverip, serverhostname or basedmgpath %s' %
             sys.exc_info())
     raise
 
@@ -254,7 +254,7 @@ def getNbiOptions(incoming):
                 # Found an eligible NBI source, add it to our nbisources list
                 nbisources.append(path)
     except:
-        logging.debug("Unexpected error getNbiOptions:", str(sys.exc_info()))
+        logging.debug("Unexpected error getNbiOptions: %s" % sys.exc_info())
         raise
 
     return nbioptions, nbisources
@@ -335,7 +335,7 @@ def getSysIdEntitlement(nbisources, clientsysid, bsdpmsgtype):
                     nbientitlements.append(thisnbi)
 
     except:
-        logging.debug("Unexpected error filtering image entitlements:", 
+        logging.debug("Unexpected error filtering image entitlements: %s" %
                         sys.exc_info())
         raise
 
@@ -385,7 +385,7 @@ def getSysIdEntitlement(nbisources, clientsysid, bsdpmsgtype):
             imagenameslist += [129,0] + imageid + [image['length']] + \
                               strlist(image['name']).list()
     except:
-        logging.debug("Unexpected error setting default image:", sys.exc_info())
+        logging.debug("Unexpected error setting default image: %s" % sys.exc_info())
         raise
 
     # print 'Entitlements: ' + str(len(nbientitlements)) + '\n' + str(nbientitlements) + '\n'
@@ -465,7 +465,7 @@ def ack(packet, defaultnbi, msgtype):
         # Get the client's IP address, a standard DHCP option
         clientip = ipv4(packet.GetOption('ciaddr'))
     except:
-        logging.debug("Unexpected error: ack() common", sys.exc_info())
+        logging.debug("Unexpected error: ack() common: %s" % sys.exc_info())
         raise
 
     #print 'Configuring common BSDP packet options'
@@ -550,7 +550,7 @@ def ack(packet, defaultnbi, msgtype):
             if hasnulldefault is False: logging.debug("Default boot image ID: " +
                                               str(defaultnbi[2:]))
         except:
-            logging.debug("Unexpected error ack() list:", sys.exc_info())
+            logging.debug("Unexpected error ack() list: %s" % sys.exc_info())
             raise
 
     # Process BSDP[SELECT] requests
@@ -562,7 +562,7 @@ def ack(packet, defaultnbi, msgtype):
             imageid = int('%02X' % bsdpoptions['selected_boot_image'][2] + 
                             '%02X' % bsdpoptions['selected_boot_image'][3], 16)
         except:
-            logging.debug("Unexpected error ack() select: imageid", 
+            logging.debug("Unexpected error ack() select: imageid: %s" % 
                             sys.exc_info())
             raise
 
@@ -581,7 +581,7 @@ def ack(packet, defaultnbi, msgtype):
                     selectedimage = bsdpoptions['selected_boot_image']
                     logging.debug('ACK[SELECT] image ID: ' + str(selectedimage))
         except:
-            logging.debug("Unexpected error ack() selectedimage:", 
+            logging.debug("Unexpected error ack() selectedimage: %s" % 
                             sys.exc_info())
             raise
 
@@ -597,7 +597,7 @@ def ack(packet, defaultnbi, msgtype):
             bsdpack.SetOption("vendor_encapsulated_options", 
                 strlist([1,1,2,8,4] + selectedimage).list())
         except:
-            logging.debug("Unexpected error ack() select SetOption:", 
+            logging.debug("Unexpected error ack() select SetOption: %s" % 
                             sys.exc_info())
             raise
 
@@ -611,7 +611,7 @@ def ack(packet, defaultnbi, msgtype):
             logging.debug("TFTP path: " + 
                           str(strlist(bsdpack.GetOption("file"))))
         except:
-            logging.debug("Unexpected error ack() select print debug:", 
+            logging.debug("Unexpected error ack() select print debug: %s" % 
                             sys.exc_info())
             raise
 
