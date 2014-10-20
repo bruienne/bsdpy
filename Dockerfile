@@ -15,7 +15,7 @@ RUN dpkg-divert --local --rename --add /sbin/initctl
 RUN ln -s /bin/true /sbin/initctl
 RUN apt-get install -y nginx tftpd-hpa
 
-RUN git clone https://bitbucket.org/bruienne/bsdpy.git
+RUN git clone https://bitbucket.org/bruienne/bsdpy.git -b dev
 RUN git clone https://github.com/bruienne/pydhcplib.git
 RUN cd ~/pydhcplib; python setup.py install
 RUN pip install docopt
