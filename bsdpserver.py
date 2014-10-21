@@ -734,9 +734,12 @@ def main():
                 #   at least 8 bytes long.
                 elif len(packet.GetOption('vendor_encapsulated_options')) <= 7:
                     pass
-        except:
+        except IOError, e:
             # Error? No worries, keep going.
-            pass
+            if e.errno != errno.EINTR:
+                raise
+            else:
+                pass
 
 if __name__ == '__main__':
     main()
