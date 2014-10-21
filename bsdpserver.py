@@ -684,8 +684,8 @@ def main():
     def scan_nbis(signal, frame):
         nbiimages = getNbiOptions(tftprootpath)
 
-    signal.signal(signal.SIGHUP, scan_nbis)
-    signal.siginterrupt(1, False)
+    signal.signal(signal.SIGUSR1, scan_nbis)
+    signal.siginterrupt(signal.SIGUSR1, False)
 
     # Print the full list of eligible NBIs to the log
     logging.debug('[========= Using the following boot images =========]')
