@@ -24,7 +24,7 @@ RUN mkdir /nbi
 
 ADD nginx.conf /etc/nginx/nginx.conf
 ADD start.sh /start.sh
-ADD nfs-client.sh /usr/local/bin/nfs-client
+# ADD nfs-client.sh /usr/local/bin/nfs-client
 
 RUN chown -R root:root /etc/nginx/nginx.conf start.sh
 RUN chmod +x start.sh /usr/local/bin/nfs-client
