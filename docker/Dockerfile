@@ -27,7 +27,7 @@ ADD start.sh /start.sh
 # ADD nfs-client.sh /usr/local/bin/nfs-client
 
 RUN chown -R root:root /etc/nginx/nginx.conf start.sh
-RUN chmod +x start.sh /usr/local/bin/nfs-client
+# RUN chmod +x start.sh /usr/local/bin/nfs-client
 
 EXPOSE 67/udp
 EXPOSE 69/udp
