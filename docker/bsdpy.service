@@ -1,0 +1,18 @@
+[Unit]
+Description=bsdpy
+After=docker.service
+Requires=docker.service
+Requires=unfs3.service
+After=unfs3.service
+Requires=tftpd.service
+After=tftpd.service
+
+[Service]
+ExecStartPre=-/usr/bin/docker pull macadmins/bsdpy:latest
+ExecStart=/usr/bin/docker run --rm --name bsdpy -h bsdpy.local --volume=/data/bsdpy:/nbi -p 0.0.0.0:8901:80/tcp -p 0.0.0.0:67:67/udp -p 0.0.0.0:68:68/udp -e VIRTUAL_HOST=X.X.X.X -e VIRTUAL_PORT=80 -e DOCKER_BSDPY_IP=X.X.X.X -e DOCKER_BSDPY_PROTO=nfs macadmins/bsdpy:latest
+ExecStartPost=-/usr/bin/docker rm bsdpy
+ExecStop=/usr/bin/docker kill bsdpy
+ExecStopPost=-/usr/bin/docker rm bsdpy
+Restart=always
+RestartSec=10
+TimeoutStartSec=5min

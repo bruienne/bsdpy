@@ -1,0 +1,17 @@
+[Unit]
+Description=TFTP Server
+After=docker.service
+Requires=docker.service
+Before=bsdpy.service
+
+[Service]
+ExecStartPre=/usr/sbin/modprobe nf_conntrack_tftp
+ExecStartPre=/usr/sbin/modprobe nf_nat_tftp
+ExecStartPre=/bin/bash -c '/usr/bin/docker inspect %n &> /dev/null && /usr/bin/docker rm %n || :'
+ExecStart=/usr/bin/docker run --rm --name %n -p 69:69/udp -v /data/bsdpy:/nbi -h tftpd macadmins/tftpd /usr/sbin/in.tftpd --listen --foreground -vvvv --verbosity 10 --user user -r blksize /nbi
+ExecStop=/usr/bin/docker stop %n
+RestartSec=5s
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

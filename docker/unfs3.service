@@ -1,0 +1,14 @@
+[Unit]
+Description=unfs3
+After=docker.service
+Before=bsdpy.service
+
+[Service]
+ExecStartPre=-/usr/bin/docker pull macadmins/unfs3:latest
+ExecStart=/usr/bin/docker run --rm --privileged -p 111:111/udp -p 111:111/tcp -p 2049:2049/udp -p 2049:2049/tcp --name unfs3 -v /data/bsdpy:/nbi -v /data/unfs3/exports:/etc/exports macadmins/unfs3
+ExecStartPost=-/usr/bin/docker rm unfs3
+ExecStop=/usr/bin/docker kill unfs3
+ExecStopPost=-/usr/bin/docker rm unfs3
+Restart=always
+RestartSec=10
+TimeoutStartSec=5min
