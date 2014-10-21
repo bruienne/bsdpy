@@ -62,6 +62,7 @@ import socket, struct, fcntl
 import os, fnmatch
 import plistlib
 import logging, optparse
+import signal
 from docopt import docopt
 
 platform = sys.platform
@@ -669,7 +670,7 @@ def main():
     # Some logging preamble
     logging.debug('\n\n-=- Starting new BSDP server session -=-\n')
 
-    # We are changing nbiimages for user by other functions
+    # We are changing nbiimages for use by other functions
     global nbiimages
 
     # Instantiate a basic pydhcplib DhcpServer class using netopts (listen port,
@@ -679,6 +680,11 @@ def main():
     # Do a one-time discovery of all available NBIs on the server. NBIs added
     #   after the server was started will not be picked up until after a restart
     nbiimages, nbisources = getNbiOptions(tftprootpath)
+
+    def scan_nbis(signal, frame):
+        nbiimages = getNbiOptions(tftprootpath)
+
+    signal.signal(signal.SIGHUP, scan_nbis)
 
     # Print the full list of eligible NBIs to the log
     logging.debug('[========= Using the following boot images =========]')
