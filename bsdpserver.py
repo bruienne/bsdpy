@@ -617,9 +617,9 @@ def ack(packet, defaultnbi, msgtype):
                 if nbidict['id'] == imageid:
                     booterfile = nbidict['booter']
                     rootpath = basedmgpath + nbidict['dmg']
-                    logging.debug('-->> Using HTTP URI: ' + str(rootpath))
+                    # logging.debug('-->> Using boot image URI: ' + str(rootpath))
                     selectedimage = bsdpoptions['selected_boot_image']
-                    logging.debug('ACK[SELECT] image ID: ' + str(selectedimage))
+                    # logging.debug('ACK[SELECT] image ID: ' + str(selectedimage))
         except:
             logging.debug("Unexpected error ack() selectedimage: %s" %
                             sys.exc_info()[1])
@@ -648,8 +648,8 @@ def ack(packet, defaultnbi, msgtype):
                     str(clientip) +
                     ' on ' +
                     str(replyport))
-            logging.debug("TFTP path: " +
-                          str(strlist(bsdpack.GetOption("file"))))
+            logging.debug("--> TFTP path: %s\n-->Boot image URI: %s"
+                          % (str(strlist(bsdpack.GetOption("file"))), str(rootpath)))
         except:
             logging.debug("Unexpected error ack() select print debug: %s" %
                             sys.exc_info()[1])
