@@ -502,6 +502,9 @@ def ack(packet, defaultnbi, msgtype):
 
         # Get the client's IP address, a standard DHCP option
         clientip = ipv4(packet.GetOption('ciaddr'))
+        if str(clientip) == '0.0.0.0':
+            clientip = ipv4(packet.GetOption('request_ip_address'))
+            logging.debug("Did not get a valid clientip, using request_ip_address %s instead" % (str(clientip),))
     except:
         logging.debug("Unexpected error: ack() common %s" %
                         sys.exc_info()[1])
