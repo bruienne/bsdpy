@@ -57,6 +57,7 @@
 
 from pydhcplib.dhcp_packet import *
 from pydhcplib.dhcp_network import *
+from urlparse import urlparse
 
 import socket, struct, fcntl
 import os, fnmatch
@@ -136,10 +137,11 @@ serverinterface = arguments['--iface']
 # Get the server IP and hostname for use in in BSDP calls later on.
 try:
     # serverinterface = get_default_gateway_linux()
-    serverhostname = socket.getfqdn()
+    #serverhostname = socket.getfqdn()
     if os.environ.get('DOCKER_BSDPY_IP'):
         # basedmgserver = os.environ.get('BSDPY_IP')
         externalip = os.environ.get('DOCKER_BSDPY_IP')
+	serverhostname = externalip
         serverip = map(int, externalip.split('.'))
         serverip_str = externalip
         logging.debug('Found $DOCKER_BSDPY_IP - using custom external IP %s'
@@ -148,18 +150,34 @@ try:
         from netifaces import ifaddresses
         logging.debug('Running on OS X, using alternate netifaces method')
         myip = ifaddresses(serverinterface)[2][0]['addr']
+	serverhostname = myip
         serverip = map(int, myip.split('.'))
         serverip_str = myip
     else:
         # basedmgserver = '.'.join(map(str, serverip))
         myip = get_ip(serverinterface)
+	serverhostname = myip
         serverip = map(int, myip.split('.'))
         serverip_str = myip
         logging.debug('No BSDPY_IP env var found, using IP from %s interface'
                         % serverinterface)
     if 'http' in bootproto:
-        basedmgpath = 'http://' + serverip_str + '/'
-        logging.debug('Using HTTP basedmgpath %s' % basedmgpath)
+	if os.environ.get('DOCKER_BSDPY_NBI_URL'):
+	    nbiurl = urlparse(os.environ.get('DOCKER_BSDPY_NBI_URL'))
+	    nbiurlhostname = nbiurl.hostname
+
+            # EFI bsdp client doesn't do DNS lookup, so we must do it
+	    try:
+		socket.inet_aton(nbiurlhostname)
+	    except socket.error:
+		nbiurlhostname = socket.gethostbyname(nbiurlhostname)
+		logging.debug('Resolving hostname to IP - %s -> %s' % (nbiurl.hostname, nbiurlhostname))
+
+	    basedmgpath = 'http://%s%s/' % (nbiurlhostname, nbiurl.path)
+	    logging.debug('Found DOCKER_BSDPY_NBI_URL - using basedmgpath %s' % basedmgpath)
+	else:
+            basedmgpath = 'http://' + serverip_str + '/'
+            logging.debug('Using HTTP basedmgpath %s' % basedmgpath)
     if 'nfs' in bootproto:
         basedmgpath = 'nfs:' + serverip_str + ':' + tftprootpath + ':'
         logging.debug('Using NFS basedmgpath %s' % basedmgpath)
@@ -172,6 +190,32 @@ except:
                     sys.exc_info()[1])
     raise
 
+def getBaseDmgPath(nbiurl) :
+
+    logging.debug('*********\nRefreshing basedmgpath because DOCKER_BSDPY_NBI_URL uses hostname, not IP')
+    if 'http' in bootproto:
+        if os.environ.get('DOCKER_BSDPY_NBI_URL'):
+           # nbiurl = urlparse(os.environ.get('DOCKER_BSDPY_NBI_URL'))
+            nbiurlhostname = nbiurl.hostname
+
+            # EFI bsdp client doesn't do DNS lookup, so we must do it
+            try:
+                socket.inet_aton(nbiurlhostname)
+            except socket.error:
+                nbiurlhostname = socket.gethostbyname(nbiurlhostname)
+                logging.debug('Resolving hostname to IP - %s -> %s' % (nbiurl.hostname, nbiurlhostname))
+
+            basedmgpath = 'http://%s%s/' % (nbiurlhostname, nbiurl.path)
+            logging.debug('Found DOCKER_BSDPY_NBI_URL - using basedmgpath %s\n*********\n' % basedmgpath)
+        else:
+            basedmgpath = 'http://' + serverip_str + '/'
+            logging.debug('Using HTTP basedmgpath %s\n*********\n' % basedmgpath)
+
+    if 'nfs' in bootproto:
+        basedmgpath = 'nfs:' + serverip_str + ':' + tftprootpath + ':'
+        logging.debug('Using NFS basedmgpath %s' % basedmgpath)
+
+    return basedmgpath
 
 # Invoke the DhcpServer class from pydhcplib and configure it, overloading the
 #   available class functions to only listen to DHCP INFORM packets, which is
@@ -613,6 +657,8 @@ def ack(packet, defaultnbi, msgtype):
         booterfile = ''
         rootpath = ''
         selectedimage = ''
+	if nbiurl.hostname[0].isalpha():
+	    basedmgpath = getBaseDmgPath(nbiurl)
 
         # Iterate over enablednbis and retrieve the kernel and boot DMG for each
         try:
