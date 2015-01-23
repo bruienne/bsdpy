@@ -55,23 +55,16 @@
 #   or upstart this should not be an issue.
 #
 
-import socket
-import struct
-import fcntl
-import os
-import fnmatch
+from pydhcplib.dhcp_packet import *
+from pydhcplib.dhcp_network import *
+from urlparse import urlparse
+
+import socket, struct, fcntl
+import os, fnmatch
 import plistlib
-import json
-import logging
-import signal
-import errno
-import sys
-
+import logging, optparse
+import signal, errno
 from docopt import docopt
-
-from pydhcplib.dhcp_packet import DhcpPacket
-from pydhcplib.dhcp_network import DhcpNetwork, DhcpServer
-
 
 platform = sys.platform
 
@@ -166,12 +159,15 @@ except KeyError as e:
 
 # Get the server IP and hostname for use in in BSDP calls later on.
 try:
-    serverhostname = socket.getfqdn()
-    if dockervars['BSDPY_IP']:
-        externalip = dockervars['BSDPY_IP']
+    # serverinterface = get_default_gateway_linux()
+    #serverhostname = socket.getfqdn()
+    if os.environ.get('DOCKER_BSDPY_IP'):
+        # basedmgserver = os.environ.get('BSDPY_IP')
+        externalip = os.environ.get('DOCKER_BSDPY_IP')
+        serverhostname = externalip
         serverip = map(int, externalip.split('.'))
         serverip_str = externalip
-        logging.debug('Found $BSDPY_IP - using custom external IP %s'
+        logging.debug('Found $DOCKER_BSDPY_IP - using custom external IP %s'
                         % externalip)
     elif 'darwin' in platform:
         from netifaces import ifaddresses
