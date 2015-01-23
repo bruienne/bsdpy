@@ -176,6 +176,7 @@ try:
         serverip_str = myip
     else:
         myip = get_ip(serverinterface)
+        serverhostname = externalip
         serverip = map(int, myip.split('.'))
         serverip_str = myip
         logging.debug('No BSDPY_IP env var found, using IP from %s interface'
