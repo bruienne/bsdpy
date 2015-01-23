@@ -1,6 +1,6 @@
 #!/usr/bin/python
 ################################################################################
-# Copyright 2014 The Regents of the University of Michigan
+# Copyright 2015 The Regents of the University of Michigan
 #
 #  Licensed under the Apache License, Version 2.0 (the "License"); you may not
 #  use this file except in compliance with the License. You may obtain a copy of
@@ -55,15 +55,23 @@
 #   or upstart this should not be an issue.
 #
 
-from pydhcplib.dhcp_packet import *
-from pydhcplib.dhcp_network import *
-
-import socket, struct, fcntl
-import os, fnmatch
+import socket
+import struct
+import fcntl
+import os
+import fnmatch
 import plistlib
-import logging, optparse
-import signal, errno
+import json
+import logging
+import signal
+import errno
+import sys
+
 from docopt import docopt
+
+from pydhcplib.dhcp_packet import DhcpPacket
+from pydhcplib.dhcp_network import DhcpNetwork, DhcpServer
+
 
 platform = sys.platform
 
@@ -72,6 +80,18 @@ usage = """Usage: bsdpyserver.py [-p <path>] [-r <protocol>] [-i <interface>]
 Run the BSDP server and handle requests from client. Optional parameters are
 the root path to serve NBIs from, the protocol to serve them with and the
 interface to run on.
+
+When BSDPy is run as a Docker service (recommended) the path, protocol and
+interface parameters can also be passed as environment variables (defaults shown):
+
+BSDPY_NBI_PATH=/nbi (Serve boot images from this path)
+BSDPY_PROTO=nfs (Use NFS or HTTP to serve boot images)
+BSDPY_IFACE=eth0 (Listen for BSDP request on this network interface)
+
+Optional env vars:
+BSDPY_IP=x.x.x.x (IP of alternative file server for retrieving kernel and DMG)
+BSDPY_API_URL=https://host/v1/endpoint (API call to retrieve NBI configs)
+BSDPY_API_KEY=1234DEADBEEF56788 (API key to use with above call)
 
 Options:
  -h --help               This screen.
@@ -103,9 +123,10 @@ bsdpoptioncodes = {1: 'message_type',
 # Some standard DHCP/BSDP options to set listen, server ports and what IP
 #   address to listen on. Default is 0.0.0.0 which means all requests are
 #   replied to if they are a BSDP[LIST] or BSDP[SELECT] packet.
-netopt = {'client_listen_port':"68",
-           'server_listen_port':"67",
-           'listen_address':"0.0.0.0"}
+netopt = {'client_listen_port': "68",
+          'server_listen_port': "67",
+          'listen_address': "0.0.0.0"}
+
 
 def get_ip(iface=''):
     """
@@ -133,16 +154,24 @@ tftprootpath = arguments['--path']
 bootproto = arguments['--proto']
 serverinterface = arguments['--iface']
 
+dockervars = {}
+
+
+try:
+    for envkey, envvalue in os.environ.iteritems():
+        if key.startswith('BSDPY'):
+            dockervars[envkey] = envvalue
+except KeyError as e:
+    logging.debug('An error occurred processing Docker env vars - key: %s', e)
+
 # Get the server IP and hostname for use in in BSDP calls later on.
 try:
-    # serverinterface = get_default_gateway_linux()
     serverhostname = socket.getfqdn()
-    if os.environ.get('DOCKER_BSDPY_IP'):
-        # basedmgserver = os.environ.get('BSDPY_IP')
-        externalip = os.environ.get('DOCKER_BSDPY_IP')
+    if dockervars['BSDPY_IP']:
+        externalip = dockervars['BSDPY_IP']
         serverip = map(int, externalip.split('.'))
         serverip_str = externalip
-        logging.debug('Found $DOCKER_BSDPY_IP - using custom external IP %s'
+        logging.debug('Found $BSDPY_IP - using custom external IP %s'
                         % externalip)
     elif 'darwin' in platform:
         from netifaces import ifaddresses
@@ -151,7 +180,6 @@ try:
         serverip = map(int, myip.split('.'))
         serverip_str = myip
     else:
-        # basedmgserver = '.'.join(map(str, serverip))
         myip = get_ip(serverinterface)
         serverip = map(int, myip.split('.'))
         serverip_str = myip
@@ -296,6 +324,7 @@ def getNbiOptions(incoming):
 
     return nbioptions, nbisources
 
+
 def getSysIdEntitlement(nbisources, clientsysid, bsdpmsgtype):
     """
         The getSysIdEntitlement function takes a list of previously compiled NBI
@@ -432,6 +461,7 @@ def getSysIdEntitlement(nbisources, clientsysid, bsdpmsgtype):
     # All done, pass the finalized list of NBIs the given clientsysid back
     return nbientitlements
 
+
 def parseOptions(bsdpoptions):
     """
         The parseOptions function parses a given bsdpoptions list and decodes
@@ -507,7 +537,7 @@ def ack(packet, defaultnbi, msgtype):
                         sys.exc_info()[1])
         raise
 
-    #print 'Configuring common BSDP packet options'
+    # print 'Configuring common BSDP packet options'
 
     # We construct the rest of our common BSDP reply parameters according to
     #   Apple's spec. The only noteworthy parameter here is sname, a zero-padded
@@ -657,6 +687,15 @@ def ack(packet, defaultnbi, msgtype):
 
     # Return the finished packet, client IP and reply port back to the caller
     return bsdpack, clientip, replyport
+
+
+def getNbiFromApi(chaddr):
+    apiurl =
+    data = {'api_version': '2', 'serial_number': 'bogus', 'board_id': chaddr, 'model_name': 'MacPro6,1'}
+    r = requests.post(izzy_url, data)
+
+    nbiForMac = data = json.loads(r.text)
+    return nbiForChaddr
 
 imagenameslist = []
 nbiimages = []
