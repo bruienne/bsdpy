@@ -164,7 +164,6 @@ try:
     if os.environ.get('DOCKER_BSDPY_IP'):
         # basedmgserver = os.environ.get('BSDPY_IP')
         externalip = os.environ.get('DOCKER_BSDPY_IP')
-        serverhostname = externalip
         serverip = map(int, externalip.split('.'))
         serverip_str = externalip
         logging.debug('Found $DOCKER_BSDPY_IP - using custom external IP %s'
