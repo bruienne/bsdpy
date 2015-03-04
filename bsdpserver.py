@@ -146,7 +146,7 @@ def get_ip(iface=''):
     ip = struct.unpack('16sH2x4s8x', res)[2]
     return socket.inet_ntoa(ip)
 
-arguments = docopt(usage, version='0.0.1')
+arguments = docopt(usage, version='0.5.0')
 
 # Set the root path that NBIs will be served out of, either provided at
 #  runtime or using a default if none was given. Defaults to /nbi.
@@ -160,19 +160,19 @@ dockervars = {}
 
 try:
     for envkey, envvalue in os.environ.iteritems():
-        if key.startswith('BSDPY'):
+        if envkey.startswith('BSDPY'):
             dockervars[envkey] = envvalue
 except KeyError as e:
-    logging.debug('An error occurred processing Docker env vars - key: %s', e)
+    logging.debug('An error occurred processing Docker env vars - Error message: %s', e)
 
 # Get the server IP and hostname for use in in BSDP calls later on.
 try:
-    if os.environ.get('DOCKER_BSDPY_IP'):
-        externalip = os.environ.get('DOCKER_BSDPY_IP')
+    if 'BSDPY_IP' in dockervars:
+        externalip = dockervars['BSDPY_IP']
         serverhostname = externalip
         serverip = map(int, externalip.split('.'))
         serverip_str = externalip
-        logging.debug('Found $DOCKER_BSDPY_IP - using custom external IP %s'
+        logging.debug('Found $BSDPY_IP - using custom external IP %s'
                         % externalip)
     elif 'darwin' in platform:
         from netifaces import ifaddresses
@@ -189,8 +189,8 @@ try:
         logging.debug('No BSDPY_IP env var found, using IP from %s interface'
                         % serverinterface)
     if 'http' in bootproto:
-        if os.environ.get('DOCKER_BSDPY_NBI_URL'):
-            nbiurl = urlparse(os.environ.get('DOCKER_BSDPY_NBI_URL'))
+        if 'BSDPY_NBI_URL' in dockervars:
+            nbiurl = urlparse(dockervars['BSDPY_NBI_URL'])
             nbiurlhostname = nbiurl.hostname
 
             # EFI bsdp client doesn't do DNS lookup, so we must do it
@@ -201,7 +201,7 @@ try:
                 logging.debug('Resolving hostname to IP - %s -> %s' % (nbiurl.hostname, nbiurlhostname))
 
             basedmgpath = 'http://%s%s/' % (nbiurlhostname, nbiurl.path)
-            logging.debug('Found DOCKER_BSDPY_NBI_URL - using basedmgpath %s' % basedmgpath)
+            logging.debug('Found BSDPY_NBI_URL - using basedmgpath %s' % basedmgpath)
         else:
             basedmgpath = 'http://' + serverip_str + '/'
             logging.debug('Using HTTP basedmgpath %s' % basedmgpath)
@@ -221,9 +221,9 @@ except:
 
 def getBaseDmgPath(nbiurl) :
 
-    logging.debug('*********\nRefreshing basedmgpath because DOCKER_BSDPY_NBI_URL uses hostname, not IP')
+    logging.debug('*********\nRefreshing basedmgpath because BSDPY_NBI_URL uses hostname, not IP')
     if 'http' in bootproto:
-        if os.environ.get('DOCKER_BSDPY_NBI_URL'):
+        if dockervars['BSDPY_NBI_URL']:
             nbiurlhostname = nbiurl.hostname
 
             # EFI bsdp client doesn't do DNS lookup, so we must do it
@@ -234,7 +234,7 @@ def getBaseDmgPath(nbiurl) :
                 logging.debug('Resolving hostname to IP - %s -> %s' % (nbiurl.hostname, nbiurlhostname))
 
             basedmgpath = 'http://%s%s/' % (nbiurlhostname, nbiurl.path)
-            logging.debug('Found DOCKER_BSDPY_NBI_URL - using basedmgpath %s\n*********\n' % basedmgpath)
+            logging.debug('Found BSDPY_NBI_URL - using basedmgpath %s\n*********\n' % basedmgpath)
         else:
             basedmgpath = 'http://' + serverip_str + '/'
             logging.debug('Using HTTP basedmgpath %s\n*********\n' % basedmgpath)
@@ -724,8 +724,8 @@ def ack(packet, defaultnbi, msgtype):
         booterfile = ''
         rootpath = ''
         selectedimage = ''
-    if nbiurl.hostname[0].isalpha():
-        basedmgpath = getBaseDmgPath(nbiurl)
+        if nbiurl.hostname[0].isalpha():
+            basedmgpath = getBaseDmgPath(nbiurl)
 
         # Iterate over enablednbis and retrieve the kernel and boot DMG for each
         try:
@@ -777,7 +777,7 @@ def ack(packet, defaultnbi, msgtype):
 
 def getNbiFromApi(chaddr):
 
-    api_url = os.environ('BSDPY_API_URL')
+    api_url = dockervars['BSDPY_API_URL']
 
     data = {'ip_address':'bogus', 'mac_address':'bogus', 'model_name':'iMac14,1'}
     r = requests.get(api_url, params=data)
