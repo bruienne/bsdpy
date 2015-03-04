@@ -371,7 +371,7 @@ def getNbiOptions(incoming):
     return nbioptions, nbisources
 
 
-def getSysIdEntitlement(nbisources, clientsysid, bsdpmsgtype):
+def getSysIdEntitlement(nbisources, clientsysid, clientmacaddr, bsdpmsgtype):
     """
         The getSysIdEntitlement function takes a list of previously compiled NBI
         sources and a clientsysid parameter to determine which of the entries in
