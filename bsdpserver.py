@@ -191,22 +191,23 @@ try:
         logging.debug('No BSDPY_IP env var found, using IP from %s interface'
                         % serverinterface)
     if 'http' in bootproto:
-    if os.environ.get('DOCKER_BSDPY_NBI_URL'):
-        nbiurl = urlparse(os.environ.get('DOCKER_BSDPY_NBI_URL'))
-        nbiurlhostname = nbiurl.hostname
+        if os.environ.get('DOCKER_BSDPY_NBI_URL'):
+            nbiurl = urlparse(os.environ.get('DOCKER_BSDPY_NBI_URL'))
+            nbiurlhostname = nbiurl.hostname
 
             # EFI bsdp client doesn't do DNS lookup, so we must do it
-        try:
-        socket.inet_aton(nbiurlhostname)
-        except socket.error:
-        nbiurlhostname = socket.gethostbyname(nbiurlhostname)
-        logging.debug('Resolving hostname to IP - %s -> %s' % (nbiurl.hostname, nbiurlhostname))
+            try:
+                socket.inet_aton(nbiurlhostname)
+            except socket.error:
+                nbiurlhostname = socket.gethostbyname(nbiurlhostname)
+                logging.debug('Resolving hostname to IP - %s -> %s' % (nbiurl.hostname, nbiurlhostname))
 
-        basedmgpath = 'http://%s%s/' % (nbiurlhostname, nbiurl.path)
-        logging.debug('Found DOCKER_BSDPY_NBI_URL - using basedmgpath %s' % basedmgpath)
-    else:
+            basedmgpath = 'http://%s%s/' % (nbiurlhostname, nbiurl.path)
+            logging.debug('Found DOCKER_BSDPY_NBI_URL - using basedmgpath %s' % basedmgpath)
+        else:
             basedmgpath = 'http://' + serverip_str + '/'
             logging.debug('Using HTTP basedmgpath %s' % basedmgpath)
+
     if 'nfs' in bootproto:
         basedmgpath = 'nfs:' + serverip_str + ':' + tftprootpath + ':'
         logging.debug('Using NFS basedmgpath %s' % basedmgpath)
