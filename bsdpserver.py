@@ -693,8 +693,8 @@ def ack(packet, defaultnbi, msgtype):
         booterfile = ''
         rootpath = ''
         selectedimage = ''
-    if nbiurl.hostname[0].isalpha():
-        basedmgpath = getBaseDmgPath(nbiurl)
+        if nbiurl.hostname[0].isalpha():
+            basedmgpath = getBaseDmgPath(nbiurl)
 
         # Iterate over enablednbis and retrieve the kernel and boot DMG for each
         try:
