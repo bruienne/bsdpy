@@ -55,7 +55,7 @@
 #   or upstart this should not be an issue.
 #
 
-from urlparse import urlparse
+from urlparse import urlparse, urlunsplit
 import socket
 import struct
 import fcntl
@@ -66,6 +66,7 @@ import logging
 import signal
 import errno
 import json
+from distutils.dir_util import mkpath
 
 from docopt import docopt
 import requests
@@ -146,17 +147,7 @@ def get_ip(iface=''):
     ip = struct.unpack('16sH2x4s8x', res)[2]
     return socket.inet_ntoa(ip)
 
-arguments = docopt(usage, version='0.5.0')
-
-# Set the root path that NBIs will be served out of, either provided at
-#  runtime or using a default if none was given. Defaults to /nbi.
-
-tftprootpath = arguments['--path']
-bootproto = arguments['--proto']
-serverinterface = arguments['--iface']
-
 dockervars = {}
-
 
 try:
     for envkey, envvalue in os.environ.iteritems():
@@ -164,6 +155,30 @@ try:
             dockervars[envkey] = envvalue
 except KeyError as e:
     logging.debug('An error occurred processing Docker env vars - Error message: %s', e)
+
+if len(dockervars) > 0:
+    logging.debug('------- Start Docker env vars -------')
+
+    for dockerkey, dockervalue in dockervars.iteritems():
+        logging.debug('%s: %s' % (dockerkey, dockervalue))
+
+    logging.debug('-------  End Docker env vars  -------')
+
+arguments = docopt(usage, version='0.5.0')
+
+# Set the root path that NBIs will be served out of, either provided at
+#  runtime or using a default if none was given. Defaults to /nbi.
+
+if 'BSDPY_NBI_PATH' in dockervars:
+    tftprootpath = dockervars['BSDPY_NBI_PATH']
+else:
+    tftprootpath = arguments['--path']
+
+logging.debug('tftprootpath is %s' % tftprootpath)
+
+bootproto = arguments['--proto']
+serverinterface = arguments['--iface']
+
 
 # Get the server IP and hostname for use in in BSDP calls later on.
 try:
@@ -209,6 +224,7 @@ try:
     if 'nfs' in bootproto:
         basedmgpath = 'nfs:' + serverip_str + ':' + tftprootpath + ':'
         logging.debug('Using NFS basedmgpath %s' % basedmgpath)
+
     logging.debug('Server IP: ' + serverip_str + '\n' +
                   'Server FQDN: ' + serverhostname + '\n' +
                   'Serving on ' + serverinterface + '\n' +
@@ -297,6 +313,12 @@ def chaddr_to_mac(chaddr):
     """Convert the chaddr data from a DhcpPacket Option to a hex string
     of the form '12:34:56:ab:cd:ef'"""
     return ":".join(hex(i)[2:] for i in chaddr[0:6])
+
+
+def download(fname, destination):
+    r = requests.get(fname)
+    with open(destination, "wb") as f:
+        f.write(r.content)
 
 
 def getNbiOptions(incoming):
@@ -497,13 +519,12 @@ def doEntitlementPostProcessing(nbientitlements):
     # Initialize list for imagenameslist, which will store dicts later
     imagenameslist = []
 
-    print('Looping over nbientitlements: %s' % nbientitlements)
     try:
         # Now we iterate through the entitled NBIs in search of a default
         #   image, as determined by its "IsDefault" key
         for image in nbientitlements:
 
-            print('This image: %s' % image)
+            # print('This image: %s' % image)
             # Check for an isdefault entry in the current NBI
             if image['isdefault'] is True:
                 logging.debug('Found default image ID ' + str(image['id']))
@@ -590,7 +611,7 @@ def parseOptions(bsdpoptions):
     return optionvalues
 
 
-def ack(packet, defaultnbi, msgtype, useapiurl):
+def ack(packet, defaultnbi, msgtype):
     """
         The ack function constructs either a BSDP[LIST] or BSDP[SELECT] ACK
         DhcpPacket(), determined by the given msgtype, 'list' or 'select'.
@@ -627,9 +648,9 @@ def ack(packet, defaultnbi, msgtype, useapiurl):
             print ">>>>>>> Doing API lookup <<<<<<<<"
             # print 'Getting API entitlements...'
             apientitlements = getNbiFromApi({'mac_address': clientmacaddr, 'model_name': clientsysid, 'ip_address': str(clientip)})
-            print('Postprocessing entitlements into enablednbis: %s' % apientitlements)
+            # print('Postprocessing entitlements into enablednbis: %s' % apientitlements)
             enablednbis = doEntitlementPostProcessing(apientitlements)
-            print('Results of postprocessing: %s' % enablednbis)
+            # print('Results of postprocessing: %s' % enablednbis)
         else:
             # Figure out the NBIs this clientsysid is entitled to
             enablednbis = getSysIdEntitlement(nbiimages, clientsysid, clientmacaddr, msgtype)
@@ -733,7 +754,6 @@ def ack(packet, defaultnbi, msgtype, useapiurl):
 
     # Process BSDP[SELECT] requests
     elif msgtype == 'select':
-        #print 'Creating SELECT packet'
         # Get the value of selected_boot_image as sent by the client and convert
         #   the value for later use.
         try:
@@ -801,31 +821,23 @@ def ack(packet, defaultnbi, msgtype, useapiurl):
     return bsdpack, clientip, replyport
 
 
-def getNbiFromApi(client, names=False):
+def getNbiFromApi(apiquery, names=False):
 
-    print(">>>>>>> query is for %s" % client)
+    # print(">>>>>>> query is for %s" % client)
 
+    # Setup common procedure for calling the API
     api_url = dockervars['BSDPY_API_URL']
+    data = apiquery
+    r = requests.get(api_url, params=data)
+    result = json.loads(r.text)
+    nbis = []
 
-    # data = {'ip_address':'bogus', 'mac_address':'bogus', 'model_name':'iMac14,1'}
-
-    if 'all' in client:
-        data = client
-        r = requests.get(api_url, params=data)
-        allnbis = json.loads(r.text)
-
-        nbis = []
-        for i in allnbis['images']:
-            nbis.append(i['name'])
+    # Get all available NBIs through the 'all=True' API endpoint
+    if 'all' in apiquery:
+        for i in result['images']:
+            if '.nbi' in i['root_dmg_url']:
+                nbis.append(i['root_dmg_url'])
     else:
-        data = client
-
-        r = requests.get(api_url, params=data)
-        result = json.loads(r.text)
-        # print('Raw result: %s' % result)
-
-        nbis = []
-
         for i in result['images']:
             nbi = {'disabledsysids': [],
                    'enabledsysids': [],
@@ -849,15 +861,18 @@ def getNbiFromApi(client, names=False):
 
     return nbis
 
-
+# Set a number of globals that will be used later on
 imagenameslist = []
 nbiimages = []
 defaultnbi = 0
 hasdefault = False
+
+# Set the useapiurl global boolean to drive local or API-controlled mode
 if 'BSDPY_API_URL' in dockervars:
     useapiurl = True
 else:
     useapiurl = False
+
 
 def main():
     """Main routine. Do the work."""
@@ -888,18 +903,59 @@ def main():
     # Determine if we were given a URL for an NBI-listing API endpoint. If we
     #   have an API URL we skip scanning the local filesystem and use API
     #   entries instead.
-    if useapiurl:
-        nbisources = getNbiFromApi({'all': True}, names=True)
-    else:
-        nbiimages, nbisources = getNbiOptions(tftprootpath)
 
     def scan_nbis(signal, frame):
         global nbiimages
-        logging.debug('[========= Updating boot images list =========]')
-        nbiimages, nbisources = getNbiOptions(tftprootpath)
-        for nbi in nbisources:
-            logging.debug(nbi)
-        logging.debug('[=========      End updated list     =========]')
+        global nbisources
+
+        if useapiurl:
+            # Grab all available NBIs from the API. See API documentation regarding
+            #   the format of the JSON the 'all' query expects.
+            nbisources = getNbiFromApi({'all': True}, names=True)
+
+            # print '***** NBI sources ******'
+            # print nbisources
+            # print '***** NBI sources ******'
+
+            # If no alternate TFTP URL was configured, download those items that
+            #   the client requests during the TFTP phase
+            nbitftpitems = ['i386/booter',
+                            'i386/com.apple.Boot.plist',
+                            'i386/PlatformSupport.plist',
+                            'i386/x86_64/kernelcache']
+
+            # Check local paths exist, create as needed
+            for source in nbisources:
+                # Parse source URL into useable local path, download baseurl source
+                #   for directory creation and storing of tftp resources
+                scheme, netloc, path, u_params, u_query, u_frag = urlparse(source)
+                rsrcpath = os.path.dirname(path).lstrip('/')
+                baseurl = urlunsplit((scheme, netloc, rsrcpath, '', ''))
+
+                # We use the path as given by the API as our directory structure
+                #   Default root path for storage is tftprootpath
+                if not find(rsrcpath, tftprootpath):
+                    mkpath(os.path.join(tftprootpath, rsrcpath))
+                for tftpitem in set([ os.path.dirname(i) for i in nbitftpitems ]):
+                    if not find(tftpitem, rsrcpath):
+                        mkpath(os.path.join(tftprootpath, rsrcpath, tftpitem))
+
+                # Download our standard set of TFTP-served files from the remote
+                #   NBI storage.
+                for tftpitem in nbitftpitems:
+                    print("Saving to %s" % os.path.join(tftprootpath, rsrcpath, tftpitem))
+                    download(baseurl + '/' + tftpitem, os.path.join(tftprootpath, rsrcpath, tftpitem))
+
+        else:
+            logging.debug('[========= Updating boot images list =========]')
+            nbiimages, nbisources = getNbiOptions(tftprootpath)
+            for nbi in nbisources:
+                logging.debug(nbi)
+            logging.debug('[=========      End updated list     =========]')
+
+            # nbiimages, nbisources = getNbiOptions(tftprootpath)
+
+    scan_nbis(None, None)
 
     signal.signal(signal.SIGUSR1, scan_nbis)
     signal.siginterrupt(signal.SIGUSR1, False)
@@ -934,8 +990,7 @@ def main():
                     # Pass ack() the matching packet, defaultnbi and 'list'
                     bsdplistack, clientip, replyport = ack(packet,
                                                             defaultnbi,
-                                                            'list',
-                                                            useapiurl)
+                                                            'list')
                     # Once we have a finished DHCP packet, send it to the client
                     server.SendDhcpPacketTo(bsdplistack, str(clientip),
                                                             replyport)
