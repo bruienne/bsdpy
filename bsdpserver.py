@@ -90,7 +90,11 @@ BSDPY_PROTO=nfs (Use NFS or HTTP to serve boot images)
 BSDPY_IFACE=eth0 (Listen for BSDP request on this network interface)
 
 Optional env vars:
-BSDPY_IP=x.x.x.x (IP of alternative file server for retrieving kernel and DMG)
+BSDPY_IP=x.x.x.x (IP to use for one or all of TFTP, HTTP and NFS requests, for:
+                  - Central TFTP/HTTP/NFS host separate from BSDPy
+                  - External IP of Docker host, all services hosted in Docker
+                  - IP of TFTP host if using API to configure NBIs sources)
+BSDPY_NBI_URL=http://myfileserver.domain.com/nbi (HTTP file host for DMG)
 BSDPY_API_URL=https://host/v1/endpoint (API call to retrieve NBI configs)
 BSDPY_API_KEY=1234DEADBEEF56788 (API key to use with above call)
 
@@ -164,6 +168,12 @@ if len(dockervars) > 0:
 
     logging.debug('-------  End Docker env vars  -------')
 
+# Set the useapiurl global boolean to drive local or API-controlled mode
+if 'BSDPY_API_URL' in dockervars:
+    useapiurl = True
+else:
+    useapiurl = False
+
 arguments = docopt(usage, version='0.5.0')
 
 # Set the root path that NBIs will be served out of, either provided at
@@ -203,7 +213,7 @@ try:
         serverip_str = myip
         logging.debug('No BSDPY_IP env var found, using IP from %s interface'
                         % serverinterface)
-    if 'http' in bootproto:
+    if 'http' in bootproto and not useapiurl:
         if 'BSDPY_NBI_URL' in dockervars:
             nbiurl = urlparse(dockervars['BSDPY_NBI_URL'])
             nbiurlhostname = nbiurl.hostname
@@ -220,6 +230,8 @@ try:
         else:
             basedmgpath = 'http://' + serverip_str + '/'
             logging.debug('Using HTTP basedmgpath %s' % basedmgpath)
+    else:
+        pass
 
     if 'nfs' in bootproto:
         basedmgpath = 'nfs:' + serverip_str + ':' + tftprootpath + ':'
@@ -480,7 +492,7 @@ def getSysIdEntitlement(nbisources, clientsysid, clientmacaddr, bsdpmsgtype):
                             '" has no restrictions, adding to list')
                     nbientitlements.append(thisnbi)
 
-                # Check for a missing entry in enabledsysids, this means we skip
+                # Check for an entry in disabledsysids, this means we skip
                 elif clientsysid in thisnbi['disabledsysids']:
                     logging.debug('System ID "' + clientsysid + '" is disabled'
                                     ' - skipping "' + thisnbi['description'] + '"')
@@ -643,14 +655,14 @@ def ack(packet, defaultnbi, msgtype):
         bsdpoptions = \
             parseOptions(packet.GetOption('vendor_encapsulated_options'))
 
+        # Get NBI entitlements for the given clientsysid and clientmacaddr for
+        #   regular non-API based mode (reading NBImageInfo.plist) or clientsysid,
+        #   clientmacaddr and clientip for API-based mode.
         if useapiurl:
             # Figure out the NBIs this clientsysid is entitled to
-            print ">>>>>>> Doing API lookup <<<<<<<<"
-            # print 'Getting API entitlements...'
+            logging.info(">>>>>>> Doing API lookup <<<<<<<<")
             apientitlements = getNbiFromApi({'mac_address': clientmacaddr, 'model_name': clientsysid, 'ip_address': str(clientip)})
-            # print('Postprocessing entitlements into enablednbis: %s' % apientitlements)
             enablednbis = doEntitlementPostProcessing(apientitlements)
-            # print('Results of postprocessing: %s' % enablednbis)
         else:
             # Figure out the NBIs this clientsysid is entitled to
             enablednbis = getSysIdEntitlement(nbiimages, clientsysid, clientmacaddr, msgtype)
@@ -741,10 +753,8 @@ def ack(packet, defaultnbi, msgtype):
 
             # Some debugging to stdout
             logging.debug('-=========================================-')
-            logging.debug("Return ACK[LIST] to " +
-                    str(clientip) +
-                    ' on ' +
-                    str(replyport))
+            logging.debug("Return ACK[LIST] to %s - %s on port %s" % (clientmacaddr,
+                            str(clientip), str(replyport)))
             if hasnulldefault is False: logging.debug("Default boot image ID: " +
                                               str(defaultnbi[2:]))
         except:
@@ -756,6 +766,7 @@ def ack(packet, defaultnbi, msgtype):
     elif msgtype == 'select':
         # Get the value of selected_boot_image as sent by the client and convert
         #   the value for later use.
+
         try:
             imageid = int('%02X' % bsdpoptions['selected_boot_image'][2] +
                             '%02X' % bsdpoptions['selected_boot_image'][3], 16)
@@ -768,15 +779,27 @@ def ack(packet, defaultnbi, msgtype):
         booterfile = ''
         rootpath = ''
         selectedimage = ''
-        if nbiurl.hostname[0].isalpha():
-            basedmgpath = getBaseDmgPath(nbiurl)
+
+        # Lookup the basedmgpath for non-API mode, or pass if API mode
+        try:
+            if nbiurl.hostname[0].isalpha() and not useapiurl:
+                basedmgpath = getBaseDmgPath(nbiurl)
+        except NameError:
+            pass
 
         # Iterate over enablednbis and retrieve the kernel and boot DMG for each
         try:
             for nbidict in enablednbis:
                 if nbidict['id'] == imageid:
                     booterfile = nbidict['booter']
-                    rootpath = basedmgpath + nbidict['dmg']
+                    # If we're using the API we already have a complete URI, so
+                    #   we use the 'dmg' key from nbidict
+                    if useapiurl:
+                        rootpath = nbidict['dmg']
+                    # Non-API mode needs us to construct the URI from basedmgpath
+                    #   and the 'dmg' key from nbidict
+                    else:
+                        rootpath = basedmgpath + nbidict['dmg']
                     # logging.debug('-->> Using boot image URI: ' + str(rootpath))
                     selectedimage = bsdpoptions['selected_boot_image']
                     # logging.debug('ACK[SELECT] image ID: ' + str(selectedimage))
@@ -804,10 +827,8 @@ def ack(packet, defaultnbi, msgtype):
         try:
             # Some debugging to stdout
             logging.debug('-=========================================-')
-            logging.debug("Return ACK[SELECT] to " +
-                          str(clientip) +
-                          ' on ' +
-                          str(replyport))
+            logging.debug("Return ACK[SELECT] to %s - %s on port %s" % (clientmacaddr,
+                            str(clientip), str(replyport)))
             logging.debug("--> TFTP path: %s"
                           % (str(strlist(bsdpack.GetOption("file")))))
             logging.debug("--> Boot Image URI: %s"
@@ -854,9 +875,21 @@ def getNbiFromApi(apiquery, names=False):
                 elif 'priority' in k:
                     nbi['id'] = v
                 elif 'booter_url' in k:
-                    nbi['booter'] = v.encode('ascii', 'ignore')
+                    nbi['booter'] = tftprootpath + v.encode('ascii', 'ignore')
                 elif 'root_dmg_url' in k:
-                    nbi['dmg'] = v.encode('ascii', 'ignore')
+                    nbiuri = v.encode('ascii', 'ignore')
+                    nbiuriparsed = urlparse(nbiuri)
+                    nbiurlhostname = nbiuriparsed.hostname
+                    try:
+                        socket.inet_aton(nbiurlhostname)
+                    except socket.error:
+                        nbiurlhostip = socket.gethostbyname(nbiurlhostname)
+                        nbi['dmg'] = "%s://%s%s" % (nbiuriparsed.scheme, nbiurlhostip, nbiuriparsed.path)
+                        logging.debug('Resolving BSDPY_NBI_URL to IP - %s -> %s' % (nbiurlhostname, nbiurlhostip))
+                    else:
+                        nbi['dmg'] = nbiuri
+
+
             nbis.append(nbi)
 
     return nbis
@@ -866,12 +899,6 @@ imagenameslist = []
 nbiimages = []
 defaultnbi = 0
 hasdefault = False
-
-# Set the useapiurl global boolean to drive local or API-controlled mode
-if 'BSDPY_API_URL' in dockervars:
-    useapiurl = True
-else:
-    useapiurl = False
 
 
 def main():
@@ -943,8 +970,13 @@ def main():
                 # Download our standard set of TFTP-served files from the remote
                 #   NBI storage.
                 for tftpitem in nbitftpitems:
-                    print("Saving to %s" % os.path.join(tftprootpath, rsrcpath, tftpitem))
-                    download(baseurl + '/' + tftpitem, os.path.join(tftprootpath, rsrcpath, tftpitem))
+                    targettftpitem = os.path.join(tftprootpath, rsrcpath, tftpitem)
+                    if not os.path.exists(targettftpitem):
+                        logging.info("Caching TFTP item %s" % targettftpitem)
+                        download(baseurl + '/' + tftpitem, targettftpitem)
+                    else:
+                        logging.info("TFTP item %s already cached, skipping" % targettftpitem)
+
 
         else:
             logging.debug('[========= Updating boot images list =========]')
