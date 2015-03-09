@@ -1,6 +1,6 @@
 #!/usr/bin/python
 ################################################################################
-# Copyright 2014 The Regents of the University of Michigan
+# Copyright 2015 The Regents of the University of Michigan
 #
 #  Licensed under the Apache License, Version 2.0 (the "License"); you may not
 #  use this file except in compliance with the License. You may obtain a copy of
@@ -108,6 +108,7 @@ netopt = {'client_listen_port':"68",
            'server_listen_port':"67",
            'listen_address':"0.0.0.0"}
 
+
 def get_ip(iface=''):
     """
         The get_ip function retrieves the IP for the network interface BSDPY
@@ -136,12 +137,9 @@ serverinterface = arguments['--iface']
 
 # Get the server IP and hostname for use in in BSDP calls later on.
 try:
-    # serverinterface = get_default_gateway_linux()
-    #serverhostname = socket.getfqdn()
     if os.environ.get('DOCKER_BSDPY_IP'):
-        # basedmgserver = os.environ.get('BSDPY_IP')
         externalip = os.environ.get('DOCKER_BSDPY_IP')
-	serverhostname = externalip
+        serverhostname = externalip
         serverip = map(int, externalip.split('.'))
         serverip_str = externalip
         logging.debug('Found $DOCKER_BSDPY_IP - using custom external IP %s'
@@ -150,52 +148,51 @@ try:
         from netifaces import ifaddresses
         logging.debug('Running on OS X, using alternate netifaces method')
         myip = ifaddresses(serverinterface)[2][0]['addr']
-	serverhostname = myip
+        serverhostname = myip
         serverip = map(int, myip.split('.'))
         serverip_str = myip
     else:
-        # basedmgserver = '.'.join(map(str, serverip))
         myip = get_ip(serverinterface)
-	serverhostname = myip
+        serverhostname = myip
         serverip = map(int, myip.split('.'))
         serverip_str = myip
         logging.debug('No BSDPY_IP env var found, using IP from %s interface'
                         % serverinterface)
     if 'http' in bootproto:
-	if os.environ.get('DOCKER_BSDPY_NBI_URL'):
-	    nbiurl = urlparse(os.environ.get('DOCKER_BSDPY_NBI_URL'))
-	    nbiurlhostname = nbiurl.hostname
+        if os.environ.get('DOCKER_BSDPY_NBI_URL'):
+            nbiurl = urlparse(os.environ.get('DOCKER_BSDPY_NBI_URL'))
+            nbiurlhostname = nbiurl.hostname
 
             # EFI bsdp client doesn't do DNS lookup, so we must do it
-	    try:
-		socket.inet_aton(nbiurlhostname)
-	    except socket.error:
-		nbiurlhostname = socket.gethostbyname(nbiurlhostname)
-		logging.debug('Resolving hostname to IP - %s -> %s' % (nbiurl.hostname, nbiurlhostname))
+            try:
+                socket.inet_aton(nbiurlhostname)
+            except socket.error:
+                nbiurlhostname = socket.gethostbyname(nbiurlhostname)
+                logging.debug('Resolving hostname to IP - %s -> %s' % (nbiurl.hostname, nbiurlhostname))
 
-	    basedmgpath = 'http://%s%s/' % (nbiurlhostname, nbiurl.path)
-	    logging.debug('Found DOCKER_BSDPY_NBI_URL - using basedmgpath %s' % basedmgpath)
-	else:
+            basedmgpath = 'http://%s%s/' % (nbiurlhostname, nbiurl.path)
+            logging.debug('Found DOCKER_BSDPY_NBI_URL - using basedmgpath %s' % basedmgpath)
+        else:
             basedmgpath = 'http://' + serverip_str + '/'
             logging.debug('Using HTTP basedmgpath %s' % basedmgpath)
     if 'nfs' in bootproto:
         basedmgpath = 'nfs:' + serverip_str + ':' + tftprootpath + ':'
         logging.debug('Using NFS basedmgpath %s' % basedmgpath)
     logging.debug('Server IP: ' + serverip_str + '\n' +
-                    'Server FQDN: ' + serverhostname + '\n' +
-                    'Serving on ' + serverinterface + '\n' +
-                    'Using ' + bootproto + ' to serve boot image.\n')
+                  'Server FQDN: ' + serverhostname + '\n' +
+                  'Serving on ' + serverinterface + '\n' +
+                  'Using ' + bootproto + ' to serve boot image.\n')
 except:
     logging.debug('Error setting serverip, serverhostname or basedmgpath %s' %
                     sys.exc_info()[1])
     raise
+
 
 def getBaseDmgPath(nbiurl) :
 
     logging.debug('*********\nRefreshing basedmgpath because DOCKER_BSDPY_NBI_URL uses hostname, not IP')
     if 'http' in bootproto:
         if os.environ.get('DOCKER_BSDPY_NBI_URL'):
-           # nbiurl = urlparse(os.environ.get('DOCKER_BSDPY_NBI_URL'))
             nbiurlhostname = nbiurl.hostname
 
             # EFI bsdp client doesn't do DNS lookup, so we must do it
@@ -222,6 +219,7 @@ def getBaseDmgPath(nbiurl) :
 #   what BSDP uses to do its thing - HandleDhcpInform().
 # http://www.opensource.apple.com/source/bootp/bootp-268/Documentation/BSDP.doc
 
+
 class DhcpServer(DhcpNetwork) :
     def __init__(self, listen_address="0.0.0.0",
                     client_listen_port=68,server_listen_port=67) :
@@ -239,6 +237,7 @@ class DhcpServer(DhcpNetwork) :
 
         self.CreateSocket()
         self.BindToAddress()
+
 
 class Server(DhcpServer):
     def __init__(self, options):
@@ -261,6 +260,12 @@ def find(pattern, path):
             if fnmatch.fnmatch(name, pattern):
                 result.append(os.path.join(root, name))
     return result
+
+
+def chaddr_to_mac(chaddr):
+    """Convert the chaddr data from a DhcpPacket Option to a hex string
+    of the form '12:34:56:ab:cd:ef'"""
+    return ":".join(hex(i)[2:] for i in chaddr[0:6])
 
 
 def getNbiOptions(incoming):
@@ -294,6 +299,8 @@ def getNbiOptions(incoming):
                 #   disabledsysids = System IDs to blacklist, optional
                 #   dmg = The actual OS image loaded after the booter
                 #   enabledsysids = System IDs to whitelist, optional
+                #   enabledmacaddrs = Enabled MAC addresses to whitelist, optional
+                #                     (and for which a key may not exist in)
                 #   id = The NBI Identifier, must be unique
                 #   isdefault = Indicates the NBI is the default
                 #   length = Length of the NBI name, needed for BSDP packet
@@ -318,6 +325,14 @@ def getNbiOptions(incoming):
                     nbimageinfo['DisabledSystemIdentifiers']
                 thisnbi['dmg'] = \
                     '/'.join(find('*.dmg', path)[0].split('/')[2:])
+
+                thisnbi['enabledmacaddrs'] = \
+                    nbimageinfo.get('EnabledMACAddresses', [])
+                # EnabledMACAddresses must be lower-case - Apple's tools create them
+                # as such, but in case they aren't..
+                thisnbi['enabledmacaddrs'] = [mac.lower() for mac in
+                                              thisnbi['enabledmacaddrs']]
+
                 thisnbi['enabledsysids'] = \
                     nbimageinfo['EnabledSystemIdentifiers']
                 thisnbi['isdefault'] = \
@@ -328,6 +343,7 @@ def getNbiOptions(incoming):
                     nbimageinfo['Name']
                 thisnbi['proto'] = \
                     nbimageinfo['Type']
+
 
                 # Add the parameters for the current NBI to nbioptions
                 nbioptions.append(thisnbi)
@@ -340,7 +356,8 @@ def getNbiOptions(incoming):
 
     return nbioptions, nbisources
 
-def getSysIdEntitlement(nbisources, clientsysid, bsdpmsgtype):
+
+def getSysIdEntitlement(nbisources, clientsysid, clientmacaddr, bsdpmsgtype):
     """
         The getSysIdEntitlement function takes a list of previously compiled NBI
         sources and a clientsysid parameter to determine which of the entries in
@@ -348,6 +365,12 @@ def getSysIdEntitlement(nbisources, clientsysid, bsdpmsgtype):
 
         The function:
         - Initializes the 'hasdupes' variable as False.
+        - Checks for an enabledmacaddrs value:
+            - If an empty list, no filtering is performed
+            - It will otherwise contain one or more MAC addresses, and thisnbi
+              will be skipped if the client's MAC address is not in this list.
+            - Apple's NetInstall service also may create a "DisabledMACAddresses"
+              blacklist, but this never seems to be used.
         - Checks for duplicate clientsysid entries in enabled/disabledsysids:
             - If found, there is a configuration issue with
               NBImageInfo.plist and thisnbi is skipped; a warning
@@ -396,6 +419,15 @@ def getSysIdEntitlement(nbisources, clientsysid, bsdpmsgtype):
             # Check whether both disabledsysids and enabledsysids are empty and
             #   if so add the NBI to the list, there are no restrictions.
             if not hasdupes:
+                # If the NBI had a non-empty EnabledMACAddresses array present,
+                # skip this image if this client's MAC is not in the list.
+                if thisnbi['enabledmacaddrs'] and \
+                    clientmacaddr not in thisnbi['enabledmacaddrs']:
+                    logging.debug('MAC address ' + clientmacaddr + ' is not '
+                                  'in the enabled MAC list - skipping "' +
+                                  thisnbi['description'] + '"')
+                    continue
+
                 if len(thisnbi['disabledsysids']) == 0 and \
                    len(thisnbi['enabledsysids']) == 0:
                     logging.debug('Image "' + thisnbi['description'] +
@@ -476,6 +508,7 @@ def getSysIdEntitlement(nbisources, clientsysid, bsdpmsgtype):
     # All done, pass the finalized list of NBIs the given clientsysid back
     return nbientitlements
 
+
 def parseOptions(bsdpoptions):
     """
         The parseOptions function parses a given bsdpoptions list and decodes
@@ -524,16 +557,19 @@ def ack(packet, defaultnbi, msgtype):
     bsdpack = DhcpPacket()
 
     try:
-        # Get the requesting client's clientsysid from the BSDP options
+        # Get the requesting client's clientsysid and MAC address from the
+        # BSDP options
         clientsysid = \
         str(strlist(packet.GetOption('vendor_class_identifier'))).split('/')[2]
+
+        clientmacaddr = chaddr_to_mac(packet.GetOption('chaddr'))
 
         # Decode and parse the BSDP options from vendor_encapsulated_options
         bsdpoptions = \
             parseOptions(packet.GetOption('vendor_encapsulated_options'))
 
         # Figure out the NBIs this clientsysid is entitled to
-        enablednbis = getSysIdEntitlement(nbiimages, clientsysid, msgtype)
+        enablednbis = getSysIdEntitlement(nbiimages, clientsysid, clientmacaddr, msgtype)
 
         # The Startup Disk preference panel in OS X uses a randomized reply port
         #   instead of the standard port 68. We check for the existence of that
@@ -657,8 +693,8 @@ def ack(packet, defaultnbi, msgtype):
         booterfile = ''
         rootpath = ''
         selectedimage = ''
-	if nbiurl.hostname[0].isalpha():
-	    basedmgpath = getBaseDmgPath(nbiurl)
+        if nbiurl.hostname[0].isalpha():
+            basedmgpath = getBaseDmgPath(nbiurl)
 
         # Iterate over enablednbis and retrieve the kernel and boot DMG for each
         try:
@@ -694,9 +730,9 @@ def ack(packet, defaultnbi, msgtype):
             # Some debugging to stdout
             logging.debug('-=========================================-')
             logging.debug("Return ACK[SELECT] to " +
-                    str(clientip) +
-                    ' on ' +
-                    str(replyport))
+                          str(clientip) +
+                          ' on ' +
+                          str(replyport))
             logging.debug("--> TFTP path: %s\n-->Boot image URI: %s"
                           % (str(strlist(bsdpack.GetOption("file"))), str(rootpath)))
         except:
@@ -711,6 +747,7 @@ imagenameslist = []
 nbiimages = []
 defaultnbi = 0
 hasdefault = False
+
 
 def main():
     """Main routine. Do the work."""
