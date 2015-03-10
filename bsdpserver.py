@@ -237,10 +237,10 @@ try:
         basedmgpath = 'nfs:' + serverip_str + ':' + tftprootpath + ':'
         logging.debug('Using NFS basedmgpath %s' % basedmgpath)
 
-    logging.debug('Server IP: ' + serverip_str + '\n' +
-                  'Server FQDN: ' + serverhostname + '\n' +
-                  'Serving on ' + serverinterface + '\n' +
-                  'Using ' + bootproto + ' to serve boot image.\n')
+    logging.info('Server IP: %s' % serverip_str)
+    logging.info('Server FQDN: %s' % serverhostname)
+    logging.info('Serving on %s' % serverinterface)
+    logging.info('Using %s to serve boot image' % bootproto)
 except:
     logging.debug('Error setting serverip, serverhostname or basedmgpath %s' %
                     sys.exc_info()[1])
