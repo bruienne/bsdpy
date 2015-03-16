@@ -67,6 +67,7 @@ import signal
 import errno
 import json
 from distutils.dir_util import mkpath
+from random import randint
 
 from docopt import docopt
 import requests
@@ -189,6 +190,12 @@ logging.debug('tftprootpath is %s' % tftprootpath)
 bootproto = arguments['--proto']
 serverinterface = arguments['--iface']
 
+# We set a randomized server_priority number for situations where there are
+#   multiple BSDP servers responding to a single client and images are hosted
+#   by each of the servers. Image IDs should be > 1024 in that case.
+serverpriority = [randint(1,255),randint(1,255)]
+logging.info("Server priority: %s" % serverpriority)
+
 
 # Get the server IP and hostname for use in in BSDP calls later on.
 try:
@@ -245,7 +252,6 @@ except:
     logging.debug('Error setting serverip, serverhostname or basedmgpath %s' %
                     sys.exc_info()[1])
     raise
-
 
 def getBaseDmgPath(nbiurl) :
 
@@ -623,7 +629,7 @@ def parseOptions(bsdpoptions):
     return optionvalues
 
 
-def ack(packet, defaultnbi, msgtype):
+def ack(packet, defaultnbi, msgtype, basedmgpath=basedmgpath):
     """
         The ack function constructs either a BSDP[LIST] or BSDP[SELECT] ACK
         DhcpPacket(), determined by the given msgtype, 'list' or 'select'.
@@ -649,7 +655,9 @@ def ack(packet, defaultnbi, msgtype):
         clientip = ipv4(packet.GetOption('ciaddr'))
         if str(clientip) == '0.0.0.0':
             clientip = ipv4(packet.GetOption('request_ip_address'))
-            logging.debug("Did not get a valid clientip, using request_ip_address %s instead" % (str(clientip),))
+            logging.debug("Did not get a valid clientip, using request_ip_address %s instead" % (str(clientip)))
+        else:
+            logging.debug("Using provided clientip %s" % (str(clientip)))
 
         # Decode and parse the BSDP options from vendor_encapsulated_options
         bsdpoptions = \
@@ -677,8 +685,8 @@ def ack(packet, defaultnbi, msgtype):
             replyport = 68
 
     except:
-        logging.debug("Unexpected error: ack() common %s" %
-                        sys.exc_info()[1])
+        logging.debug("Unexpected error: ack() common %s - %s" %
+                        sys.exc_info()[0], sys.exc_info()[1])
         raise
 
     # We construct the rest of our common BSDP reply parameters according to
@@ -735,7 +743,8 @@ def ack(packet, defaultnbi, msgtype):
             #   after the initial INFORM[LIST] request we test for 0 and if
             #   so, skip inserting the defaultnbi BSDP option. Since it is
             #   optional anyway we won't confuse the client.
-            compiledlistpacket = strlist([1,1,1,4,2,128,128]).list()
+
+            compiledlistpacket = strlist([1,1,1,4,2] + serverpriority).list()
             if not hasnulldefault:
                 compiledlistpacket += strlist(defaultnbi).list()
             compiledlistpacket += strlist(bsdpimagelist).list()
@@ -778,12 +787,17 @@ def ack(packet, defaultnbi, msgtype):
         # Initialize variables for the booter file (kernel) and the dmg path
         booterfile = ''
         rootpath = ''
-        selectedimage = ''
+        selectedimage = []
+
+        # print "Current basedmgpath = %s" % basedmgpath
 
         # Lookup the basedmgpath for non-API mode, or pass if API mode
         try:
             if nbiurl.hostname[0].isalpha() and not useapiurl:
+            # if not useapiurl:
+                print "Not using API URL - gathering basedmgpath"
                 basedmgpath = getBaseDmgPath(nbiurl)
+                print basedmgpath
         except NameError:
             pass
 
@@ -803,6 +817,7 @@ def ack(packet, defaultnbi, msgtype):
                     # logging.debug('-->> Using boot image URI: ' + str(rootpath))
                     selectedimage = bsdpoptions['selected_boot_image']
                     # logging.debug('ACK[SELECT] image ID: ' + str(selectedimage))
+
         except:
             logging.debug("Unexpected error ack() selectedimage: %s" %
                             sys.exc_info()[1])
@@ -816,11 +831,21 @@ def ack(packet, defaultnbi, msgtype):
         try:
             bsdpack.SetOption("file",
                 strlist(booterfile.ljust(128,'\x00')).list())
+        except:
+            logging.debug("Unexpected error ack() select SetOption('file'): %s" %
+                            sys.exc_info()[1])
+            raise
+        try:
             bsdpack.SetOption("root_path", strlist(rootpath).list())
+        except:
+            logging.debug("Unexpected error ack() select SetOption('root_path'): %s" %
+                            sys.exc_info()[1])
+            raise
+        try:
             bsdpack.SetOption("vendor_encapsulated_options",
                 strlist([1,1,2,8,4] + selectedimage).list())
         except:
-            logging.debug("Unexpected error ack() select SetOption: %s" %
+            logging.debug("Unexpected error ack() select SetOption('vendor_encapsulated_options'): %s" %
                             sys.exc_info()[1])
             raise
 
@@ -860,6 +885,7 @@ def getNbiFromApi(apiquery, names=False):
                 nbis.append(i['root_dmg_url'])
     else:
         for i in result['images']:
+
             nbi = {'disabledsysids': [],
                    'enabledsysids': [],
                    'enabledmacaddrs': [],
@@ -877,20 +903,25 @@ def getNbiFromApi(apiquery, names=False):
                 elif 'booter_url' in k:
                     nbi['booter'] = tftprootpath + v.encode('ascii', 'ignore')
                 elif 'root_dmg_url' in k:
-                    nbiuri = v.encode('ascii', 'ignore')
-                    nbiuriparsed = urlparse(nbiuri)
-                    nbiurlhostname = nbiuriparsed.hostname
-                    try:
-                        socket.inet_aton(nbiurlhostname)
-                    except socket.error:
-                        nbiurlhostip = socket.gethostbyname(nbiurlhostname)
-                        nbi['dmg'] = "%s://%s%s" % (nbiuriparsed.scheme, nbiurlhostip, nbiuriparsed.path)
-                        logging.debug('Resolving BSDPY_NBI_URL to IP - %s -> %s' % (nbiurlhostname, nbiurlhostip))
+                    if '.nbi' in v:
+                        nbiuri = v.encode('ascii', 'ignore')
+                        nbiuriparsed = urlparse(nbiuri)
+                        nbiurlhostname = nbiuriparsed.hostname
+                        try:
+                            socket.inet_aton(nbiurlhostname)
+                        except socket.error:
+                            nbiurlhostip = socket.gethostbyname(nbiurlhostname)
+                            nbi['dmg'] = "%s://%s%s" % (nbiuriparsed.scheme, nbiurlhostip, nbiuriparsed.path)
+                            logging.debug('Resolving BSDPY_NBI_URL to IP - %s -> %s' % (nbiurlhostname, nbiurlhostip))
+                        else:
+                            nbi['dmg'] = nbiuri
                     else:
-                        nbi['dmg'] = nbiuri
-
-
-            nbis.append(nbi)
+                        logging.debug("Missing or incorrect NBI URI %s, skipping %s" % (v, nbi['name']))
+                        break
+            else:
+                nbis.append(nbi)
+                continue
+            break
 
     return nbis
 
@@ -899,7 +930,6 @@ imagenameslist = []
 nbiimages = []
 defaultnbi = 0
 hasdefault = False
-
 
 def main():
     """Main routine. Do the work."""
