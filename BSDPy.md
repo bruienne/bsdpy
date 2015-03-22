@@ -292,8 +292,10 @@ When making the per-client API call the following parameters are sent in the
 
  
 
-When receiving the response from the API the following keys are required to be
-present:
+The API response should be in JSON format, with a content type of
+`application/json`. The root object should be an array of objects named
+`images`. The following object keys are required for each valid image and should
+have a non-empty value:
 
 -   `booter_url` - A valid absolute path to the booter (string)
 
@@ -305,8 +307,7 @@ present:
 
  
 
-The API response should be in JSON format, with a content type of
-`application/json`. A sample JSON response might look something like this:
+A sample JSON response might look something like this:
 
  
 
@@ -330,7 +331,7 @@ The API response should be in JSON format, with a content type of
              "priority": 2001,
              "root_dmg_url": "http://mynbirepo.org/netboot/10.9-13E28.nbi/NetInstall.dmg",
              "updated_at": "2015-03-11T15:21:16-04:00"
-            },
+            }
            ]
 }
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
