@@ -350,11 +350,11 @@ with the BSDP client's load balancing host selection mechanism.
 Linux run mode
 --------------
 
-As of version 1.0 the recommended method of running the BSDPy service is as a
-Docker container, with supporting containers for the TFTP, HTTP and NFS
-services. It is also still possible to run the service directly on most modern
-Linux distributions but support for any distribution-specific differences is up
-to the individual sys admin. That said, the service does not have a very
+As of version 1.0 the recommended way to run the BSDPy service is as a Docker
+container, with supporting containers for the TFTP, HTTP and NFS services. It is
+also still possible to run the service directly on most modern Linux
+distributions but support for any distribution-specific implemenation is up to
+the individual sys admin. That said, the service does not have a very
 complicated set of requirements if run this way.
 
  
@@ -455,18 +455,18 @@ By default BSDPy will assume the service root path is /nbi. If it is not, you
 can specify it in the CLI:
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-$ sudo bsdpserver.py -p /mynbiroot
+$ sudo bsdpserver.py -p /usr/share/netboot
 #Sample output
 
-DEBUG: BSDPY_NBI_PATH: /mynbiroot  
+DEBUG: BSDPY_NBI_PATH: /usr/share/netboot  
 DEBUG: BSDPY_IFACE: eth0  
 DEBUG: BSDPY_PROTO: http  
 DEBUG: [========= Updating boot images list =========]  
 DEBUG: Considering NBI source at /mynbiroot/109-13E28.nbi  
-DEBUG: /mynbiroot/109-13E28.nbi  
+DEBUG: /usr/share/netboot/109-13E28.nbi  
 DEBUG: [=========      End updated list     =========]  
 DEBUG: [===== Using the following boot images =======]  
-DEBUG: /mynbiroot/109-13E28.nbi  
+DEBUG: /usr/share/netboot/109-13E28.nbi  
 DEBUG: [======     End boot image listing      ======]  
 DEBUG: -=============================================-
 
