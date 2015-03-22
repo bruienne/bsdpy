@@ -2,8 +2,8 @@ BSDPy 1.0
 =========
 
 BSDPy is a platform-independent Apple NetBoot (BSDP) service for organizations
-that have a need for Apple Mac NetBoot functionality without the ability to
-support Apple Mac server hardware and software.
+that have a need for Apple Mac NetBoot functionality but that lack the ability
+to support OS X server in order to implement it.
 
  
 
@@ -11,29 +11,29 @@ General Functionality
 ---------------------
 
 The BSDPy service provides the same NetInstall feature set provided by Apple's
-OS X Server application, which depending on the OS X version is either called
-"NetBoot" or "NetInstall". Management tools like DeployStudio and JAMF Casper
-which rely on a NetInstall-style image to launch an imaging client that writes a
-disk image to a local HD or SSD and performs post-imaging configuration are
-fully compatible with BSDPy. NetInstall-style images created by Apple's System
-Image Utility or any other tools that create a NetInstall-style NBI are also
-fully compatible. BSDPy does not currently support the less frequently used
-diskless NetBoot mode which relies on a shadow disk image to be mounted from the
-NetBoot server.
+OS X Server, which depending on the OS X version is either called "NetBoot" or
+"NetInstall". Management tools like DeployStudio and JAMF Casper which rely on a
+NetInstall-style image to launch an imaging client that writes a disk image to a
+local HD or SSD and performs post-imaging configuration are fully compatible
+with BSDPy. NetInstall-style images created by Apple's System Image Utility or
+any other tools that create a NetInstall-style NBI are also fully compatible.
+BSDPy does not currently support the less frequently used diskless NetBoot mode
+which relies on a shadow disk image to be mounted from an AFP share. Shadowing
+using a RAM disk or local storage is fully supported.
 
  
 
 Configuration
 -------------
 
-To function, BSDPy needs to be told about a valid network interface to listen
-on, the boot image network protocol to use and the boot image root path on the
-host. By default it uses **"eth0"**, **"HTTP"** and **"/nbi"** for these
-settings. Configuration of BSDPy is mainly done through environment variables
-due to its Docker-leaning deployment preference. A few basic items like
-aforementioned required network interface, boot image protocol and NBI root path
-can also be set using command line flags. The complete set of configuration
-items is as follows, with defaults in square brackets:
+To function, BSDPy needs to be given a valid network interface to listen on, the
+boot image network protocol to use and the boot image root path on the host. By
+default it uses **"eth0"**, **"HTTP"** and **"/nbi"** for these settings.
+Configuration of BSDPy is mainly done through environment variables due to its
+Docker-leaning deployment preference. A few basic items like aforementioned
+required network interface, boot image protocol and NBI root path can also be
+set using command line flags. The complete set of configuration items is as
+follows, with defaults in square brackets:
 
  
 
@@ -95,7 +95,7 @@ in the **"Deployment methods"** section later in this document.
 When running in self-contained mode BSDPy and its NBI content and supporting
 services are located on the same host. This means that BSDP, TFTP and HTTP/NFS
 services are all running on the host with a local directory containing one or
-more NBI bundles.
+more NBI bundles. By default this directory is `/nbi`.
 
 Required settings (defaults in brackets):
 
@@ -204,11 +204,11 @@ converted to an IP address if a DNS hostname was used) and the relative path to
 NetInstall.dmg from the root directory set by `BSDPY_NBI_PATH` on the BSDPy
 host:
 
-`http://10.0.1.100/netboot`
+`BSDPY_NBI_URL` = `http://10.0.1.100/netboot`
 
 \+
 
-`109-13E28.nbi/NetInstall.dmg`
+`BSDPY_NBI_PATH` = `109-13E28.nbi/NetInstall.dmg`
 
 =
 
@@ -350,11 +350,143 @@ with the BSDP client's load balancing host selection mechanism.
 Linux run mode
 --------------
 
+As of version 1.0 the recommended method of running the BSDPy service is as a
+Docker container, with supporting containers for the TFTP, HTTP and NFS
+services. It is also still possible to run the service directly on most modern
+Linux distributions but support for any distribution-specific differences is up
+to the individual sys admin. That said, the service does not have a very
+complicated set of requirements if run this way.
+
+ 
+
 ### Linux single host
+
+To run the BSDPy service from a single Linux host the required BSDPy settings,
+services and ports as outlined in the **Running self-contained **section earlier
+in this document can be used. Settings can be provided either via command line
+flags or environment variables. To recap, the `BSDPy` service, `TFTP` service
+and either `HTTP` or `NFS` services will all be running on the same host and
+connecting clients will be sent the same IP address or host name for all
+requests.
+
+A sample setup for CentOS 6.4 from an earlier version of this README follows.
+
+ 
+
+Install and start the TFTP and NFS services and clone the required repositories:
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+$ sudo yum -y install gcc xinetd tftp-server nfs-utils nfs-utils-lib git-core python python-devel
+$ sudo sed -i 's/\/var\/lib\/tftpboot/\/nbi/' /etc/xinetd.d/tftp
+$ sudo sed -i 's/\-s//' /etc/xinetd.d/tftp
+$ sudo sed -i 's/SELINUX=.*/SELINUX=disabled/' /etc/sysconfig/selinux
+$ sudo sh -c 'echo "/nbi   *(async,ro,no_root_squash,insecure)" >> /etc/exports'
+$ sudo mkdir /nbi
+$ sudo chkconfig --levels 235 nfs on
+$ sudo chkconfig --levels 235 xinetd on
+$ sudo chkconfig --levels 235 tftp on
+$ sudo chkconfig --levels 235 iptables off
+$ sudo service nfs start
+$ sudo service xinetd start
+$ git clone https://bitbucket.org/bruienne/bsdpy.git
+$ cd /bsdpy
+$ sudo pip install -r requirements.txt
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Once the above is complete, one or more NBI bundles must be transferred to the
+server’s NetBoot service root path, **/nbi**. Assuming SSH is active, using scp
+to copy one or more images over would be straightforward:
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+$ scp -r /Path/To/MyNetBoot.nbi user@bsdpyhost:/nbi
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Once one or more boot images have been transferred, verify that both TFTP and
+NFS work by testing their connectivity from a client that can reach the BSDPy
+server:
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+$ showmount -e <ip or hostname of BSDPy server>
+Export list for <ip or hostname of BSDPy server>:
+/nbi *
+$ cd ~/; mkdir nbimount
+$ mount -t nfs <ip or hostname>:/nbi ~/nbimount
+$ ls ~/nbimount
+#Sample output
+DSR-1090.nbi  NI2.nbi  NI.nbi
+
+$ umount ~/nbimount
+$ tftp <ip or hostname>
+#Sample get command
+tftp> get /nbi/MyNetBoot.nbi/i386/booter
+Received 174997 bytes in 0.2 seconds
+tftp> quit
+$ ls -l booter
+#Sample output
+-rwxr-xr-x 1 root root 994464 May 15  2013 booter
+
+$ rm booter
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If TFTP and NFS check out successfully the BSDPy service can be started:
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+$ cd bsdpy
+$ sudo bsdpserver.py
+#Sample output
+
+DEBUG: BSDPY_NBI_PATH: /nbi  
+DEBUG: BSDPY_IFACE: eth0  
+DEBUG: BSDPY_PROTO: http  
+DEBUG: [========= Updating boot images list =========]  
+DEBUG: Considering NBI source at /nbi/109-13E28.nbi  
+DEBUG: /nbi/109-13E28.nbi  
+DEBUG: [=========      End updated list     =========]  
+DEBUG: [===== Using the following boot images =======]  
+DEBUG: /nbi/109-13E28.nbi  
+DEBUG: [======     End boot image listing      ======]  
+DEBUG: -=============================================-  
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+By default BSDPy will assume the service root path is /nbi. If it is not, you
+can specify it in the CLI:
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+$ sudo bsdpserver.py -p /mynbiroot
+#Sample output
+
+DEBUG: BSDPY_NBI_PATH: /mynbiroot  
+DEBUG: BSDPY_IFACE: eth0  
+DEBUG: BSDPY_PROTO: http  
+DEBUG: [========= Updating boot images list =========]  
+DEBUG: Considering NBI source at /mynbiroot/109-13E28.nbi  
+DEBUG: /mynbiroot/109-13E28.nbi  
+DEBUG: [=========      End updated list     =========]  
+DEBUG: [===== Using the following boot images =======]  
+DEBUG: /mynbiroot/109-13E28.nbi  
+DEBUG: [======     End boot image listing      ======]  
+DEBUG: -=============================================-
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+ 
 
 ### Linux multi-host
 
- 
+To run the BSDPy service using multiple Linux hosts, for example to serve boot
+images from a dedicated file server or content delivery network, the required
+BSDPy settings, services and ports as outlined in the **Running with a separate
+NBI repository** section earlier in this document can be used. Settings can be
+provided either via command line flags or environment variables. To recap, the
+`BSDPy` service and `TFTP` service will be running on one host while one or more
+separate hosts will be running the `HTTP` or `NFS` service. The latter may
+implement whatever load balancing methodology is appropriate for the
+organization, keeping in mind that when the boot image is requested it will be
+done using an IP address that was resolved from a hostname, if configured
+through `BSDPY_NBI_URL`.
 
 Docker run mode
 ---------------
