@@ -238,6 +238,7 @@ try:
             basedmgpath = 'http://' + serverip_str + '/'
             logging.debug('Using HTTP basedmgpath %s' % basedmgpath)
     else:
+        basedmgpath = ''
         pass
 
     if 'nfs' in bootproto:
@@ -854,8 +855,8 @@ def ack(packet, defaultnbi, msgtype, basedmgpath=basedmgpath):
             logging.debug('-=========================================-')
             logging.debug("Return ACK[SELECT] to %s - %s on port %s" % (clientmacaddr,
                             str(clientip), str(replyport)))
-            logging.debug("--> TFTP path: %s"
-                          % (str(strlist(bsdpack.GetOption("file")))))
+            logging.debug("--> TFTP URI: tftp://%s%s"
+                          % (serverip_str,str(strlist(bsdpack.GetOption("file")))))
             logging.debug("--> Boot Image URI: %s"
                           % (str(rootpath)))
         except:
