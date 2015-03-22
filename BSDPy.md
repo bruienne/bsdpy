@@ -344,7 +344,7 @@ should be unique and additionally should be greater than **1024** if more than
 one BSDPy instance will be running on the same network segment for compatibility
 with the BSDP client's load balancing host selection mechanism.
 
-![](<BSDPy.images/N6n3r4.jpg>)
+![](<https://bytebucket.org/bruienne/bsdpy/raw/1a7eee604bfbb548ddc02e4d1ab3bb1dfee37b3b/BSDPy.images/N6n3r4.jpg>)
 
 Linux run mode
 --------------
