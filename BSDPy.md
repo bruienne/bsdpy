@@ -26,14 +26,14 @@ NetBoot server.
 Configuration
 -------------
 
-To function, BSDPy need to be told about a valid network interface to listen on,
-the boot image network protocol to use and the boot image root path on the host.
-By default it uses **"eth0"**, **"HTTP"** and **"/nbi"** for these settings.
-Configuration of BSDPy is mainly done through environment variables due to its
-Docker-leaning deployment preference. A few basic items like aforementioned
-required network interface, boot image protocol and NBI root path can also be
-set using command line flags. The complete set of configuration items is as
-follows, with defaults in square brackets:
+To function, BSDPy needs to be told about a valid network interface to listen
+on, the boot image network protocol to use and the boot image root path on the
+host. By default it uses **"eth0"**, **"HTTP"** and **"/nbi"** for these
+settings. Configuration of BSDPy is mainly done through environment variables
+due to its Docker-leaning deployment preference. A few basic items like
+aforementioned required network interface, boot image protocol and NBI root path
+can also be set using command line flags. The complete set of configuration
+items is as follows, with defaults in square brackets:
 
  
 
@@ -297,7 +297,7 @@ present:
 
 -   `booter_url` - A valid absolute path to the booter (string)
 
--   `name` -  A valid unique image name (string)
+-   `name` - A valid unique image name (string)
 
 -   `priority` - A valid unique (1-1024/1025-4096) image ID (integer)
 
