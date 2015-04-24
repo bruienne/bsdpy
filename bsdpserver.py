@@ -395,8 +395,9 @@ def getNbiOptions(incoming):
                     nbimageinfo['Description']
                 thisnbi['disabledsysids'] = \
                     nbimageinfo['DisabledSystemIdentifiers']
-                thisnbi['dmg'] = \
-                    '/'.join(find('*.dmg', path)[0].split('/')[2:])
+                if nbimageinfo['Type'] != 'BootFileOnly':
+                    thisnbi['dmg'] = \
+                        '/'.join(find('*.dmg', path)[0].split('/')[2:])
 
                 thisnbi['enabledmacaddrs'] = \
                     nbimageinfo.get('EnabledMACAddresses', [])
