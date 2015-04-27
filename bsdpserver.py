@@ -804,8 +804,8 @@ def ack(packet, defaultnbi, msgtype, basedmgpath=basedmgpath):
             pass
 
         # Iterate over enablednbis and retrieve the kernel and boot DMG for each
-        try:
-            for nbidict in enablednbis:
+        for nbidict in enablednbis:
+            try:
                 if nbidict['id'] == imageid:
                     booterfile = nbidict['booter']
                     # If we're using the API we already have a complete URI, so
@@ -815,15 +815,17 @@ def ack(packet, defaultnbi, msgtype, basedmgpath=basedmgpath):
                     # Non-API mode needs us to construct the URI from basedmgpath
                     #   and the 'dmg' key from nbidict
                     else:
-                        rootpath = basedmgpath + nbidict['dmg']
+                        try:
+                            rootpath = basedmgpath + nbidict['dmg']
+                        except:
+                            continue
                     # logging.debug('-->> Using boot image URI: ' + str(rootpath))
                     selectedimage = bsdpoptions['selected_boot_image']
                     # logging.debug('ACK[SELECT] image ID: ' + str(selectedimage))
-
-        except:
-            logging.debug("Unexpected error ack() selectedimage: %s" %
-                            sys.exc_info()[1])
-            raise
+            except:
+                logging.debug("Unexpected error ack() selectedimage: %s" %
+                                sys.exc_info()[1])
+                raise
 
         # Generate the rest of the BSDP[SELECT] ACK packet by encoding the
         #   name of the kernel (file), the TFTP path and the vendor encapsulated
