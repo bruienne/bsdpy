@@ -506,8 +506,7 @@ def getSysIdEntitlement(nbisources, clientsysid, clientmacaddr, bsdpmsgtype):
                                     ' - skipping "' + thisnbi['description'] + '"')
 
                 # Check for an entry in enabledsysids
-                elif clientsysid not in thisnbi['enabledsysids'] or \
-                     (clientsysid in thisnbi['enabledsysids'] and
+                elif (clientsysid in thisnbi['enabledsysids'] and
                      clientsysid not in thisnbi['disabledsysids']):
                     logging.debug('Found enabled system ID ' + clientsysid +
                           ' - adding "' + thisnbi['description'] + '" to list')
