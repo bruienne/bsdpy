@@ -8,10 +8,11 @@ ENV BSDPY_IP 127.0.0.1
 ENV BSDPY_PROTO http
 
 RUN /bin/mkdir /bsdpy
-RUN /bin/touch /bsdpy/__init__.py /var/log/bsdpserver.log
+RUN /bin/touch /var/log/bsdpserver.log
 
 ADD start.sh /
 ADD bsdpserver.py /bsdpy/
+ADD __init__.py /bsdpy/
 ADD pydhcplib /bsdpy/pydhcplib
 ADD requirements.txt /
 
