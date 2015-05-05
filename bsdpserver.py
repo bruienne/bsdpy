@@ -401,8 +401,14 @@ def getNbiOptions(incoming):
                 thisnbi['disabledsysids'] = \
                     nbimageinfo['DisabledSystemIdentifiers']
                 if nbimageinfo['Type'] != 'BootFileOnly':
-                    thisnbi['dmg'] = \
-                        '/'.join(find('*.dmg', path)[0].split('/')[2:])
+                    if nbimageinfo.get('RootPath'):
+                        thisnbi['dmg'] = nbimageinfo.get('RootPath')
+                    else:
+                        for dmgtype in ('dmg', 'sparseimage'):
+                            thisnbi['dmg'] = \
+                                '/'.join(find('*.%s' % dmgtype, path)[0].split('/')[2:])
+                            if thisnbi.get('dmg'):
+                                    break
 
                 thisnbi['enabledmacaddrs'] = \
                     nbimageinfo.get('EnabledMACAddresses', [])
@@ -522,7 +528,7 @@ def getSysIdEntitlement(nbisources, clientsysid, clientmacaddr, bsdpmsgtype):
                         sys.exc_info()[1])
         raise
 
-    result = doEntitlementPostProcessing(nbientitlements)
+    result, defaultnbi = doEntitlementPostProcessing(nbientitlements)
 
     return result
 
@@ -1054,7 +1060,7 @@ def main():
                 # If we have vendor_encapsulated_options check for a value of 1
                 #   which in BSDP terms means the packet is a BSDP[LIST] request
                 if packet.GetOption('vendor_encapsulated_options')[2] == 1:
-                    print('\n-==============================[-> BSDP LIST <-]=======================================-')
+                    logging.debug('\n-==============================[-> BSDP LIST <-]=======================================-')
                     # logging.debug('Got BSDP INFORM[LIST] packet: ')
 
                     # Pass ack() the matching packet, defaultnbi and 'list'
@@ -1068,7 +1074,7 @@ def main():
                 # If the vendor_encapsulated_options BSDP type is 2, we process
                 #   the packet as a BSDP[SELECT] request
                 elif packet.GetOption('vendor_encapsulated_options')[2] == 2:
-                    print('\n-=============================[-> BSDP SELECT <-]=======================================-')
+                    logging.debug'\n-=============================[-> BSDP SELECT <-]=======================================-')
                     # logging.debug('Got BSDP INFORM[SELECT] packet: ')
 
 
@@ -1084,7 +1090,7 @@ def main():
                 elif len(packet.GetOption('vendor_encapsulated_options')) <= 7:
                     pass
 
-                print('-=======================================================================================-')
+                logging.debug'-=======================================================================================-')
         except:
             # Error? No worries, keep going.
             pass
