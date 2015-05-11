@@ -194,7 +194,14 @@ else:
 logging.debug('tftprootpath is %s' % tftprootpath)
 
 bootproto = arguments['--proto']
+
+if 'BSDPY_PROTO' in dockervars:
+    bootproto = dockervars.get('BSDPY_PROTO')
+
 serverinterface = arguments['--iface']
+
+if 'BSDPY_IFACE' in dockervars:
+    serverinterface = dockervars.get('BSDPY_IFACE')
 
 # We set a randomized server_priority number for situations where there are
 #   multiple BSDP servers responding to a single client and images are hosted
@@ -226,7 +233,7 @@ try:
         serverip_str = myip
         logging.debug('No BSDPY_IP env var found, using IP from %s interface'
                         % serverinterface)
-    if 'http' in bootproto and not useapiurl:
+    if not useapiurl:
         if 'BSDPY_NBI_URL' in dockervars:
             nbiurl = urlparse(dockervars['BSDPY_NBI_URL'])
             nbiurlhostname = nbiurl.hostname
@@ -238,19 +245,28 @@ try:
                 nbiurlhostname = socket.gethostbyname(nbiurlhostname)
                 logging.debug('Resolving BSDPY_NBI_URL to IP - %s -> %s' % (nbiurl.hostname, nbiurlhostname))
 
-            basedmgpath = 'http://%s%s/' % (nbiurlhostname, nbiurl.path)
-            logging.debug('Found BSDPY_NBI_URL - using basedmgpath %s' % basedmgpath)
+            if 'http' in bootproto:
+                basedmgpath = 'http://%s%s/' % (nbiurlhostname, nbiurl.path)
+                logging.debug('Found BSDPY_NBI_URL - using HTTP basedmgpath %s' % basedmgpath)
+
+            if 'nfs' in bootproto:
+                basedmgpath = 'nfs:' + serverip_str + ':' + tftprootpath + ':'
+                logging.debug('Found BSDPY_NBI_URL - using NFS basedmgpath %s' % basedmgpath)
+
         else:
-            basedmgpath = 'http://' + serverip_str + tftprootpath + '/'
-            nbiurl = basedmgpath
-            logging.debug('Using HTTP basedmgpath %s' % basedmgpath)
+            if 'http' in bootproto:
+                basedmgpath = 'http://' + serverip_str + tftprootpath + '/'
+                nbiurl = basedmgpath
+                logging.debug('Using HTTP basedmgpath %s' % basedmgpath)
+            if 'nfs' in bootproto:
+                basedmgpath = 'nfs:' + serverip_str + ':' + tftprootpath + ':'
+                nbiurl = basedmgpath
+                logging.debug('Using NFS basedmgpath %s' % basedmgpath)
+
     else:
         basedmgpath = ''
         pass
 
-    if 'nfs' in bootproto:
-        basedmgpath = 'nfs:' + serverip_str + ':' + tftprootpath + ':'
-        logging.debug('Using NFS basedmgpath %s' % basedmgpath)
 
     logging.info('Server IP: %s' % serverip_str)
     logging.info('Server FQDN: %s' % serverhostname)
