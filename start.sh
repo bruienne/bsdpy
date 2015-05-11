@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/bin/sh -x
 
 /usr/bin/env python /bsdpy/bsdpserver.py &
 

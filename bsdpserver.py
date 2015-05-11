@@ -114,6 +114,7 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s: %(message)s',
 # Set a number of globals that will be used later on
 imagenameslist = []
 nbiimages = []
+
 defaultnbi = 0
 hasdefault = False
 
@@ -240,7 +241,8 @@ try:
             basedmgpath = 'http://%s%s/' % (nbiurlhostname, nbiurl.path)
             logging.debug('Found BSDPY_NBI_URL - using basedmgpath %s' % basedmgpath)
         else:
-            basedmgpath = 'http://' + serverip_str + '/'
+            basedmgpath = 'http://' + serverip_str + tftprootpath + '/'
+            nbiurl = basedmgpath
             logging.debug('Using HTTP basedmgpath %s' % basedmgpath)
     else:
         basedmgpath = ''
@@ -262,26 +264,33 @@ except:
 def getBaseDmgPath(nbiurl) :
 
     # logging.debug('*********\nRefreshing basedmgpath because BSDPY_NBI_URL uses hostname, not IP')
-    if 'http' in bootproto:
-        if dockervars['BSDPY_NBI_URL']:
-            nbiurlhostname = nbiurl.hostname
 
-            # EFI bsdp client doesn't do DNS lookup, so we must do it
-            try:
-                socket.inet_aton(nbiurlhostname)
-            except socket.error:
-                nbiurlhostname = socket.gethostbyname(nbiurlhostname)
-                logging.debug('Resolving BSDPY_NBI_URL to IP - %s -> %s' % (nbiurl.hostname, nbiurlhostname))
+    try:
+        if 'http' in bootproto:
+            if dockervars.get('BSDPY_NBI_URL'):
+                nbiurlhostname = nbiurl.hostname
 
-            basedmgpath = 'http://%s%s/' % (nbiurlhostname, nbiurl.path)
-            logging.debug('Found BSDPY_NBI_URL - using basedmgpath %s' % basedmgpath)
-        else:
-            basedmgpath = 'http://' + serverip_str + '/'
-            logging.debug('Using HTTP basedmgpath %s' % basedmgpath)
+                # EFI bsdp client doesn't do DNS lookup, so we must do it
+                try:
+                    socket.inet_aton(nbiurlhostname)
+                except socket.error:
+                    nbiurlhostname = socket.gethostbyname(nbiurlhostname)
+                    logging.debug('Resolving BSDPY_NBI_URL to IP - %s -> %s' % (nbiurl.hostname, nbiurlhostname))
 
-    if 'nfs' in bootproto:
-        basedmgpath = 'nfs:' + serverip_str + ':' + tftprootpath + ':'
-        logging.debug('Using NFS basedmgpath %s' % basedmgpath)
+                basedmgpath = 'http://%s%s/' % (nbiurlhostname, nbiurl.path)
+                logging.debug('Found BSDPY_NBI_URL - using basedmgpath %s' % basedmgpath)
+            else:
+                # basedmgpath = 'http://' + serverip_str + '/'
+                basedmgpath = nbiurl
+                logging.debug('Using HTTP basedmgpath %s' % basedmgpath)
+
+        if 'nfs' in bootproto:
+            # basedmgpath = 'nfs:' + serverip_str + ':' + tftprootpath + ':'
+            basedmgpath = nbiurl
+            logging.debug('Using NFS basedmgpath %s' % basedmgpath)
+    except:
+        logging.debug('getBaseDmgPath - Error setting basedmgpath %s' %
+                        sys.exc_info()[1])
 
     return basedmgpath
 
@@ -402,13 +411,27 @@ def getNbiOptions(incoming):
                     nbimageinfo['DisabledSystemIdentifiers']
                 if nbimageinfo['Type'] != 'BootFileOnly':
                     if nbimageinfo.get('RootPath'):
-                        thisnbi['dmg'] = nbimageinfo.get('RootPath')
+                        bootimage = find(nbimageinfo.get('RootPath'), path)[0]
+                        if os.path.islink(bootimage):
+                            thisnbi['dmg'] = \
+                                '/'.join(os.path.realpath(bootimage).split('/')[2:])
+                            logging.debug('Image %s RootPath is a symlink, resolving...'
+                                % nbimageinfo['Name'])
+                        else:
+                            thisnbi['dmg'] = \
+                                '/'.join(bootimage.split('/')[2:])
                     else:
                         for dmgtype in ('dmg', 'sparseimage'):
-                            thisnbi['dmg'] = \
-                                '/'.join(find('*.%s' % dmgtype, path)[0].split('/')[2:])
-                            if thisnbi.get('dmg'):
-                                    break
+                            bootimage = find('*.%s' % dmgtype, path)[0]
+                            if os.path.islink(bootimage):
+                                thisnbi['dmg'] = \
+                                    '/'.join(os.path.realpath(bootimage).split('/')[2:])
+                                logging.debug('Image %s RootPath is a symlink, resolving...'
+                                    % nbimageinfo['Name'])
+                            else:
+                                thisnbi['dmg'] = \
+                                    '/'.join(bootimage.split('/')[2:])
+
 
                 thisnbi['enabledmacaddrs'] = \
                     nbimageinfo.get('EnabledMACAddresses', [])
@@ -505,23 +528,22 @@ def getSysIdEntitlement(nbisources, clientsysid, clientmacaddr, bsdpmsgtype):
                                   thisnbi['description'] + '"')
                     continue
 
-                if len(thisnbi['disabledsysids']) == 0 and \
-                   len(thisnbi['enabledsysids']) == 0:
+                if len(thisnbi['enabledsysids']) == 0:
                     logging.debug('Image "' + thisnbi['description'] +
                             '" has no restrictions, adding to list')
                     nbientitlements.append(thisnbi)
 
-                # Check for an entry in disabledsysids, this means we skip
-                elif clientsysid in thisnbi['disabledsysids']:
-                    logging.debug('System ID "' + clientsysid + '" is disabled'
-                                    ' - skipping "' + thisnbi['description'] + '"')
-
                 # Check for an entry in enabledsysids
-                elif (clientsysid in thisnbi['enabledsysids'] and
-                     clientsysid not in thisnbi['disabledsysids']):
+                elif clientsysid in thisnbi['enabledsysids']:
                     logging.debug('Found enabled system ID ' + clientsysid +
                           ' - adding "' + thisnbi['description'] + '" to list')
                     nbientitlements.append(thisnbi)
+
+                # # Check for an entry in disabledsysids, this means we skip
+                # elif clientsysid in thisnbi['disabledsysids']:
+                #     logging.debug('System ID "' + clientsysid + '" is disabled'
+                #                     ' - skipping "' + thisnbi['description'] + '"')
+
 
     except:
         logging.debug("Unexpected error filtering image entitlements: %s" %
@@ -644,7 +666,7 @@ def parseOptions(bsdpoptions):
     return optionvalues
 
 
-def ack(packet, msgtype, defaultnbi=defaultnbi, basedmgpath=basedmgpath):
+def ack(packet, msgtype, defaultnbi, basedmgpath=basedmgpath):
     """
         The ack function constructs either a BSDP[LIST] or BSDP[SELECT] ACK
         DhcpPacket(), determined by the given msgtype, 'list' or 'select'.
@@ -807,17 +829,15 @@ def ack(packet, msgtype, defaultnbi=defaultnbi, basedmgpath=basedmgpath):
         rootpath = ''
         selectedimage = []
 
-        # print "Current basedmgpath = %s" % basedmgpath
-
         # Lookup the basedmgpath for non-API mode, or pass if API mode
-        try:
-            if nbiurl.hostname[0].isalpha() and not useapiurl:
-            # if not useapiurl:
-                print "Not using API URL - gathering basedmgpath"
-                basedmgpath = getBaseDmgPath(nbiurl)
-                print basedmgpath
-        except NameError:
-            pass
+        # try:
+            # if nbiurl.hostname[0].isalpha() and not useapiurl:
+        if not useapiurl:
+        # if not useapiurl:
+            logging.debug('Not using API URL - gathering basedmgpath')
+            basedmgpath = getBaseDmgPath(nbiurl)
+        # except NameError:
+        #     pass
 
         # Iterate over enablednbis and retrieve the kernel and boot DMG for each
         for nbidict in enablednbis:
@@ -944,6 +964,7 @@ def getNbiFromApi(apiquery, names=False):
             break
 
     return nbis
+
 
 def main():
     """Main routine. Do the work."""
@@ -1074,12 +1095,12 @@ def main():
                 # If the vendor_encapsulated_options BSDP type is 2, we process
                 #   the packet as a BSDP[SELECT] request
                 elif packet.GetOption('vendor_encapsulated_options')[2] == 2:
-                    logging.debug'\n-=============================[-> BSDP SELECT <-]=======================================-')
+                    logging.debug('\n-=============================[-> BSDP SELECT <-]=======================================-')
                     # logging.debug('Got BSDP INFORM[SELECT] packet: ')
 
 
                     bsdpselectack, selectackclientip, selectackreplyport = \
-                        ack(packet, 'select')
+                        ack(packet, 'select', defaultnbi=defaultnbi)
 
                     # Once we have a finished DHCP packet, send it to the client
                     server.SendDhcpPacketTo(bsdpselectack,
@@ -1090,7 +1111,7 @@ def main():
                 elif len(packet.GetOption('vendor_encapsulated_options')) <= 7:
                     pass
 
-                logging.debug'-=======================================================================================-')
+                logging.debug('\n-=======================================================================================-')
         except:
             # Error? No worries, keep going.
             pass
