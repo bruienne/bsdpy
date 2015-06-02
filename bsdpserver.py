@@ -139,24 +139,40 @@ netopt = {'client_listen_port': "68",
           'server_listen_port': "67",
           'listen_address': "0.0.0.0"}
 
+arguments = docopt(usage, version='0.5.0')
 
-
-def get_ip(iface=''):
+def get_ip(iface='', hostos='linux'):
     """
         The get_ip function retrieves the IP for the network interface BSDPY
         is running on.
     """
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sockfd = sock.fileno()
-    SIOCGIFADDR = 0x8915
+    if 'linux' in hostos:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sockfd = sock.fileno()
+        SIOCGIFADDR = 0x8915
 
-    ifreq = struct.pack('16sH14s', iface, socket.AF_INET, '\x00' * 14)
-    try:
-        res = fcntl.ioctl(sockfd, SIOCGIFADDR, ifreq)
-    except:
-        return None
-    ip = struct.unpack('16sH2x4s8x', res)[2]
-    return socket.inet_ntoa(ip)
+        ifreq = struct.pack('16sH14s', iface, socket.AF_INET, '\x00' * 14)
+        try:
+            res = fcntl.ioctl(sockfd, SIOCGIFADDR, ifreq)
+        except:
+            return None
+        ip = struct.unpack('16sH2x4s8x', res)[2]
+        return socket.inet_ntoa(ip)
+    elif 'windows' in hostos:
+        # 203.0.113.1 is reserved in TEST-NET-3 per RFC5737
+        # Should never be local, essentially equal to "internet"
+        # This should get the 'default' interface
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+        	# Uses UDP for instant 'connect' and port 9 for discard
+        	# protocol: http://en.wikipedia.org/wiki/Discard_Protocol
+            s.connect(('203.0.113.1', 9))
+            client = s.getsockname()[0]
+        except socket.error:
+            client = None
+        finally:
+            del s
+        return client
 
 dockervars = {}
 
@@ -180,8 +196,6 @@ if 'BSDPY_API_URL' in dockervars:
     useapiurl = True
 else:
     useapiurl = False
-
-arguments = docopt(usage, version='0.5.0')
 
 # Set the root path that NBIs will be served out of, either provided at
 #  runtime or using a default if none was given. Defaults to /nbi.
@@ -226,6 +240,13 @@ try:
         serverhostname = myip
         serverip = map(int, myip.split('.'))
         serverip_str = myip
+    elif 'cygwin' in platform:
+        myip = get_ip(hostos='windows')
+        serverhostname = myip
+        serverip = map(int, myip.split('.'))
+        serverip_str = myip
+        logging.debug('No BSDPY_IP env var found, running on Windows,
+                      'using IP from the primary interface')
     else:
         myip = get_ip(serverinterface)
         serverhostname = myip
@@ -264,6 +285,7 @@ try:
                 logging.debug('Using NFS basedmgpath %s' % basedmgpath)
 
     else:
+        logging.debug('Running in API mode, ignoring basedmgpath')
         basedmgpath = ''
         pass
 
@@ -583,6 +605,9 @@ def doEntitlementPostProcessing(nbientitlements):
     global defaultnbi
     global imagenameslist
     global hasdefault
+
+    hasdefault = False
+    defaultnbi = 0
 
     # Initialize list for imagenameslist, which will store dicts later
     imagenameslist = []
@@ -1107,6 +1132,7 @@ def main():
                     # Once we have a finished DHCP packet, send it to the client
                     server.SendDhcpPacketTo(bsdplistack, str(clientip),
                                                             replyport)
+                    logging.debug('\n-=======================================================================================-')
 
                 # If the vendor_encapsulated_options BSDP type is 2, we process
                 #   the packet as a BSDP[SELECT] request
@@ -1122,12 +1148,13 @@ def main():
                     server.SendDhcpPacketTo(bsdpselectack,
                                             str(selectackclientip),
                                             selectackreplyport)
+                    logging.debug('\n-=======================================================================================-')
+
                 # If the packet length is 7 or less, move on, BSDP packets are
                 #   at least 8 bytes long.
                 elif len(packet.GetOption('vendor_encapsulated_options')) <= 7:
                     pass
 
-                logging.debug('\n-=======================================================================================-')
         except:
             # Error? No worries, keep going.
             pass
