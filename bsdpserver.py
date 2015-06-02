@@ -245,7 +245,7 @@ try:
         serverhostname = myip
         serverip = map(int, myip.split('.'))
         serverip_str = myip
-        logging.debug('No BSDPY_IP env var found, running on Windows,
+        logging.debug('No BSDPY_IP env var found, running on Windows, '
                       'using IP from the primary interface')
     else:
         myip = get_ip(serverinterface)
