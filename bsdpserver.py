@@ -140,7 +140,6 @@ netopt = {'client_listen_port': "68",
           'listen_address': "0.0.0.0"}
 
 
-
 def get_ip(iface=''):
     """
         The get_ip function retrieves the IP for the network interface BSDPY
@@ -159,11 +158,15 @@ def get_ip(iface=''):
     return socket.inet_ntoa(ip)
 
 dockervars = {}
+redisvars = {}
 
 try:
     for envkey, envvalue in os.environ.iteritems():
         if envkey.startswith('BSDPY'):
             dockervars[envkey] = envvalue
+        if envkey.startswith('DB'):
+            redisvars[envkey] = envvalue
+
 except KeyError as e:
     logging.debug('An error occurred processing Docker env vars - Error message: %s', e)
 
@@ -174,6 +177,18 @@ if len(dockervars) > 0:
         logging.debug('%s: %s' % (dockerkey, dockervalue))
 
     logging.debug('-------  End Docker env vars  -------')
+
+# Setup a Redis connection if a Docker var was defined
+if len(redisvars) > 0:
+    from redis import StrictRedis
+    useredis = True
+    redishost = redisvars['DB_PORT_6379_TCP_ADDR']
+    redisport = redisvars['DB_PORT_6379_TCP_PORT']
+    redis = StrictRedis(host=redishost, port=redisport)
+    logging.debug('Using Redis caching for clients to host %s on port %s' % (redishost, redisport))
+else:
+    useredis = False
+
 
 # Set the useapiurl global boolean to drive local or API-controlled mode
 if 'BSDPY_API_URL' in dockervars:
@@ -930,8 +945,34 @@ def getNbiFromApi(apiquery, names=False):
     # Setup common procedure for calling the API
     api_url = dockervars['BSDPY_API_URL']
     data = apiquery
-    r = requests.get(api_url, params=data, timeout=5)
-    result = json.loads(r.text)
+
+    #Check our cache for existing entry for this MAC/model combo
+    # skip API lookup if we have one cached.
+
+    if useredis and not names:
+        cachedkey = '%s,%s,%s' % (apiquery['mac_address'], apiquery['model_name'], apiquery['ip_address'])
+        if redis.keys(cachedkey):
+            logging.info('Using cached data for MAC %s and model %s' % (apiquery['mac_address'], apiquery['model_name']))
+            cachedresults = {}
+            cachedresults['name'] = redis.hget(cachedkey, 'name')
+            cachedresults['priority'] = int(redis.hget(cachedkey, 'priority'))
+            cachedresults['id'] = int(redis.hget(cachedkey, 'id'))
+            cachedresults['booter_url'] = redis.hget(cachedkey, 'booter_url')
+            cachedresults['root_dmg_url'] = redis.hget(cachedkey, 'root_dmg_url')
+            result = {'images': [cachedresults]}
+
+        else:
+            logging.info('Caching data for MAC %s and model %s' % (apiquery['mac_address'], apiquery['model_name']))
+            r = requests.get(api_url, params=data, timeout=5)
+            result = json.loads(r.text)
+            for tocache in result['images']:
+                for k,v in tocache.iteritems():
+                    redis.hset(cachedkey,k,v)
+            redis.expire(cachedkey, 300)
+    else:
+        r = requests.get(api_url, params=data, timeout=5)
+        result = json.loads(r.text)
+
     nbis = []
 
     # Get all available NBIs through the 'all=True' API endpoint
