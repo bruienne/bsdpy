@@ -365,7 +365,7 @@ def chaddr_to_mac(chaddr):
 
 
 def download(fname, destination):
-    r = requests.get(fname)
+    r = requests.get(fname, timeout=5)
     with open(destination, "wb") as f:
         f.write(r.content)
 
@@ -930,7 +930,7 @@ def getNbiFromApi(apiquery, names=False):
     # Setup common procedure for calling the API
     api_url = dockervars['BSDPY_API_URL']
     data = apiquery
-    r = requests.get(api_url, params=data)
+    r = requests.get(api_url, params=data, timeout=5)
     result = json.loads(r.text)
     nbis = []
 
